@@ -632,12 +632,12 @@ internal class PiavRoadContainer : MonoBehaviour
         foreach (var contact in originSegment.Contacts)
         {
 
-            var possibleRoot = RoadUtilities.GetClosestRoot(contact._target.Polynomial, pos);
+            var possibleRoot = RoadUtilities.GetClosestRoot(contact.Target.Polynomial, pos);
 
             if (possibleRoot.Item2 < minimalDistance)
             {
                 minimalDistance = possibleRoot.Item2;
-                closestSegment  = contact._target;
+                closestSegment  = contact.Target;
                 closestRoot     = possibleRoot.Item1;
             }
         }
@@ -645,12 +645,12 @@ internal class PiavRoadContainer : MonoBehaviour
         foreach (var contact in originSegment.IncomingContacts)
         {
 
-            var possibleRoot = RoadUtilities.GetClosestRoot(contact._origin.Polynomial, pos);
+            var possibleRoot = RoadUtilities.GetClosestRoot(contact.Origin.Polynomial, pos);
 
             if (possibleRoot.Item2 < minimalDistance)
             {
                 minimalDistance = possibleRoot.Item2;
-                closestSegment  = contact._target;
+                closestSegment  = contact.Target;
                 closestRoot     = possibleRoot.Item1;
             }
         }
@@ -672,8 +672,8 @@ internal class PiavRoadContainer : MonoBehaviour
                     if (c.GetType() == typeof(PointContact))
                     {
                         Gizmos.color = Color.white;
-                        var v1       = RoadUtilities.Calculate(c._origin.Polynomial, ((PointContact)c).OriginRoot);
-                        var v2       = RoadUtilities.Calculate(c._target.Polynomial, ((PointContact)c).TargetRoot);
+                        var v1       = RoadUtilities.Calculate(c.Origin.Polynomial, ((PointContact)c).OriginRoot);
+                        var v2       = RoadUtilities.Calculate(c.Target.Polynomial, ((PointContact)c).TargetRoot);
                         Gizmos.DrawSphere(v1, 0.4f);
                         Gizmos.DrawSphere(v2, 0.4f);
                         Gizmos.DrawLine(v1, v2);
@@ -681,8 +681,8 @@ internal class PiavRoadContainer : MonoBehaviour
                     else if (c.GetType() == typeof(LaneContact))
                     {
                         Gizmos.color = Color.blue;
-                        var v1       = RoadUtilities.Calculate(c._origin.Polynomial, 0.5);
-                        var v2       = RoadUtilities.Calculate(c._target.Polynomial, 0.5);
+                        var v1       = RoadUtilities.Calculate(c.Origin.Polynomial, 0.5);
+                        var v2       = RoadUtilities.Calculate(c.Target.Polynomial, 0.5);
                         Gizmos.DrawSphere(v1, 0.4f);
                         Gizmos.DrawSphere(v2, 0.4f);
                         Gizmos.DrawLine(v1, v2);

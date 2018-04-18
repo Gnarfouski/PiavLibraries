@@ -1,6 +1,6 @@
 ﻿using UnityEngine;
 
-internal class PointContact : Contact
+public class PointContact : Contact
 {
     public PointContact(double st, double ft, Segment origin, Segment target)
         : base(origin, target)

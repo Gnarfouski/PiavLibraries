@@ -216,12 +216,39 @@ public static class RoadUtilities {
 
         if (startDistance + distance < 0)
             return new Tuple<double, double>(startDistance + distance, 0);
+        if(startDistance + distance > arcLengthValues[0] + arcLengthValues[1])
+            return new Tuple<double, double>(startDistance + distance - arcLengthValues[0] - arcLengthValues[1], 1);
 
-        return startDistance + distance > arcLengthValues[0] + arcLengthValues[1] ?
-                   new Tuple<double, double>(startDistance + distance - (arcLengthValues[0] + arcLengthValues[1]), 1) :
-                   new Tuple<double, double>(0, invarcLengthValues[0] * (startDistance + distance) * (startDistance + distance) + invarcLengthValues[1] * (startDistance + distance));
+        var finalDistance = startDistance + distance;
+        return new Tuple<double, double>(0, invarcLengthValues[0] * finalDistance * finalDistance + invarcLengthValues[1] * finalDistance);
     }
 
+    public static Tuple<double, double> GetProjectionTo(double[] arcLengthValues, double[] invarcLengthValues, double startRoot, double endRoot, double distance)
+    {
+        if (startRoot < 0 || startRoot > 1 || endRoot < 0 || endRoot > 1)
+        {
+            Debug.LogError("RoadUtilities.GetProjectionTo called with roots " + startRoot + " " + endRoot + " (must be between 0 and 1)");
+            return new Tuple<double, double>(double.NaN, double.NaN);
+        }
+
+        if (startRoot > endRoot && distance > 0 || startRoot < endRoot && distance < 0)
+        {
+            Debug.LogError("RoadUtilities.GetProjectionTo called with bad distance sign - must be positive if projecting with the first derivative and negative if against.");
+            return new Tuple<double, double>(double.NaN, double.NaN);
+        }
+
+        var finalDistance = arcLengthValues[0] * startRoot * startRoot + arcLengthValues[1] * startRoot + distance;
+        var endDistance = arcLengthValues[0] * endRoot * endRoot + arcLengthValues[1] * endRoot;
+
+        if (distance < 0)
+            return finalDistance < endDistance ?
+                       new Tuple<double, double>(finalDistance - endDistance, endRoot) :
+                       new Tuple<double, double>(0, invarcLengthValues[0] * finalDistance * finalDistance + invarcLengthValues[1] * finalDistance);
+        else
+            return finalDistance > endDistance ?
+                       new Tuple<double, double>(finalDistance - endDistance, endRoot) :
+                       new Tuple<double, double>(0, invarcLengthValues[0] * finalDistance * finalDistance + invarcLengthValues[1] * finalDistance);
+    }
 }
 
 

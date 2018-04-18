@@ -2,14 +2,14 @@
 {
     protected Contact(Segment origin, Segment target)
     {
-        _origin = origin;
-        _target = target;
+        Origin = origin;
+        Target = target;
     }
 
     #region Variables
 
-    internal Segment _origin;
-    internal Segment _target;
+    public Segment Origin;
+    public Segment Target;
 
     #endregion
 }
