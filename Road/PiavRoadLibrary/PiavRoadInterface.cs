@@ -207,9 +207,14 @@ internal class PiavRoadInterface : MonoBehaviour
     /// </summary>
     internal void LoadRegressedFunctions()
     {
-        _arcLengthRegressionValues = new double[_lanePolynoms.GetLength(0),_lanePolynoms.GetLength(1),2,2];
+        _arcLengthRegressionValues = new double[_lanePolynoms.GetLength(0),_lanePolynoms.GetLength(1),2,3];
         var steps  = new double[11];
         var values = new double[11];
+
+        double maxError = 0.0;
+        double minError = double.PositiveInfinity;
+        double avgError = 0.0;
+        int errorCount = 0;
 
         for (int j = 0; j < _lanePolynoms.GetLength(0); j++)
         {
@@ -221,16 +226,54 @@ internal class PiavRoadInterface : MonoBehaviour
                     values[i] = _lanePolynoms[j,k].ArcLength(0.0, steps[i]);
                 }
 
-                var arc                          = AdHocGradientDescent.QuadraticRegressionBoldDriver(steps, values, 10000, 0.1);
-                _arcLengthRegressionValues[j, k, 0, 0] = arc.Item1;// * _lanePolynoms[j, k].ArcLength(0.0, 1.0);
-                _arcLengthRegressionValues[j, k, 0, 1] = arc.Item2;// * _lanePolynoms[j, k].ArcLength(0.0, 1.0);
+                if (_lanePolynoms[j, k]._coeffs[0, 0] < 0.0001 && _lanePolynoms[j, k]._coeffs[0, 1] < 0.0001 && _lanePolynoms[j, k]._coeffs[0, 2] < 0.0001)
+                {
+                    _arcLengthRegressionValues[j, k, 0, 0] = 0;
+                    _arcLengthRegressionValues[j, k, 0, 1] = 0;
+                    _arcLengthRegressionValues[j, k, 0, 2] = _lanePolynoms[j, k].ArcLength(0.0, 1.0);
 
+                    _arcLengthRegressionValues[j, k, 1, 0] = 0;
+                    _arcLengthRegressionValues[j, k, 1, 1] = 0;
+                    _arcLengthRegressionValues[j, k, 1, 2] = 1 / _arcLengthRegressionValues[j, k, 0, 2];
+                }
+                else
+                {
+                    var arc = AdHocGradientDescent.PolyfitRegression(steps, values);
+                    //var arc                                = AdHocGradientDescent.CubicRegressionBoldDriver(steps, values, 500000, 0.1, 10,10,20);
+                    _arcLengthRegressionValues[j, k, 0, 0] = arc.Item1; // * _lanePolynoms[j, k].ArcLength(0.0, 1.0);
+                    _arcLengthRegressionValues[j, k, 0, 1] = arc.Item2; // * _lanePolynoms[j, k].ArcLength(0.0, 1.0);
+                    _arcLengthRegressionValues[j, k, 0, 2] = arc.Item3;
 
-                var invArc                       = AdHocGradientDescent.QuadraticRegressionBoldDriver(values, steps, 100000, 0.000001);
-                _arcLengthRegressionValues[j, k, 1, 0] = invArc.Item1;
-                _arcLengthRegressionValues[j, k, 1, 1] = invArc.Item2;
+                    var invArc = AdHocGradientDescent.PolyfitRegression(values, steps);
+                    //var invArc                             = AdHocGradientDescent.CubicRegressionBoldDriver(values, steps, 500000, 0.00005,0.1,0.1,1);
+                    _arcLengthRegressionValues[j, k, 1, 0] = invArc.Item1;
+                    _arcLengthRegressionValues[j, k, 1, 1] = invArc.Item2;
+                    _arcLengthRegressionValues[j, k, 1, 2] = invArc.Item3;
+                }
+
+                var error = RunRegressionErrorTest(j, k);
+                if (error > maxError) maxError = error;
+                if (error < minError) minError = error;
+                avgError += error;
+                errorCount++;
             }
         }
+
+        avgError /= errorCount;
+        Debug.Log("Avg : " + avgError + " | Min : " + minError + " | Max : " + maxError);
+    }
+
+    private double RunRegressionErrorTest(int j, int k)
+    {
+        var dif = 0.0;
+        for (double d = 0.0; d <= 1.0; d += 0.01)
+        {
+            var alen = _arcLengthRegressionValues[j, k, 0, 0] * d * d * d + _arcLengthRegressionValues[j, k, 0, 1] * d * d + _arcLengthRegressionValues[j, k, 0, 2] * d;
+            var ilen = _arcLengthRegressionValues[j, k, 1, 0] * alen * alen * alen + _arcLengthRegressionValues[j, k, 1, 1] * alen * alen + _arcLengthRegressionValues[j, k, 1, 2] * alen;
+            dif += Math.Abs(ilen - d);
+        }
+        dif /= 101;
+        return dif;
     }
 
     /// <summary> Reload the correct data from RoadConfig with the saved template index.

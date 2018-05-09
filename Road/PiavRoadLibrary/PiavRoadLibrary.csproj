@@ -7,8 +7,8 @@
     <ProjectGuid>{B655A1BB-6DDF-4DEA-BEC5-3B932553E9A9}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>TGD3RoadLibrary</RootNamespace>
-    <AssemblyName>TGD3RoadLibrary</AssemblyName>
+    <RootNamespace>PiavRoadLibrary</RootNamespace>
+    <AssemblyName>PiavRoadLibrary</AssemblyName>
     <TargetFrameworkVersion>v4.6.1</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
   </PropertyGroup>
@@ -46,6 +46,9 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AdHocGradientDescent.cs" />
+    <Compile Include="Libraries\LUDecomposition.cs" />
+    <Compile Include="Libraries\Matrix.cs" />
+    <Compile Include="Libraries\PolyFit.cs" />
     <Compile Include="PiavFullRoadXmlRegeneration.cs" />
     <Compile Include="PiavFullRoadXmlRegenerationEditor.cs" />
     <Compile Include="LaneTemplate.cs" />

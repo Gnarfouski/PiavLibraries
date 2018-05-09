@@ -150,7 +150,7 @@ public static class RoadUtilities {
 
         if (root < -0.1 || root > 1.1)
         {
-            Debug.LogError("RoadUtilities.Calculate called with bad root (range 0-1 required).");
+            Debug.LogError("RoadUtilities.Calculate called with " + root + " root (range 0-1 required).");
             return Vector3.zero;
         }
 
@@ -200,7 +200,9 @@ public static class RoadUtilities {
             Debug.LogError("RoadUtilities.GetArcLengthBetween called with roots " + startRoot + " | " + endRoot + " (must be between 0 and 1)");
             return double.NaN;
         }
-        return arcLengthValues[0] * endRoot * endRoot + arcLengthValues[1] * endRoot - (arcLengthValues[0] * startRoot * startRoot + arcLengthValues[1] * startRoot);
+        return
+            arcLengthValues[0] * endRoot * endRoot * endRoot + arcLengthValues[1] * endRoot * endRoot + arcLengthValues[2] * endRoot -
+            (arcLengthValues[0] * startRoot * startRoot * startRoot + arcLengthValues[1] * startRoot * startRoot + arcLengthValues[2] * startRoot);
     }
 
     ///<summary> Returns a tuple (remaining distance, givenRoot)
@@ -212,15 +214,25 @@ public static class RoadUtilities {
             Debug.LogError("RoadUtilities.GetProjection called with root " + startRoot + " (must be between 0 and 1)");
             return new Tuple<double, double>(double.NaN, double.NaN);
         }
-        var startDistance = arcLengthValues[0] * startRoot * startRoot + arcLengthValues[1] * startRoot;
+
+        //Debug.Log("start root " + startRoot);
+        var startDistance = arcLengthValues[0] * startRoot * startRoot * startRoot +
+                            arcLengthValues[1] * startRoot * startRoot +
+                            arcLengthValues[2] * startRoot;
+        //Debug.Log("start distance " + startDistance);
 
         if (startDistance + distance < 0)
             return new Tuple<double, double>(startDistance + distance, 0);
-        if(startDistance + distance > arcLengthValues[0] + arcLengthValues[1])
-            return new Tuple<double, double>(startDistance + distance - arcLengthValues[0] - arcLengthValues[1], 1);
+
+        var totalDistance = arcLengthValues[0] + arcLengthValues[1] + arcLengthValues[2];
+        if (startDistance + distance > totalDistance)
+            return new Tuple<double, double>(startDistance + distance - totalDistance, 1);
 
         var finalDistance = startDistance + distance;
-        return new Tuple<double, double>(0, invarcLengthValues[0] * finalDistance * finalDistance + invarcLengthValues[1] * finalDistance);
+        return new Tuple<double, double>(0,
+                                         invarcLengthValues[0] * finalDistance * finalDistance * finalDistance +
+                                         invarcLengthValues[1] * finalDistance * finalDistance +
+                                         invarcLengthValues[2] * finalDistance);
     }
 
     public static Tuple<double, double> GetProjectionTo(double[] arcLengthValues, double[] invarcLengthValues, double startRoot, double endRoot, double distance)
@@ -232,22 +244,19 @@ public static class RoadUtilities {
         }
 
         if (startRoot > endRoot && distance > 0 || startRoot < endRoot && distance < 0)
-        {
-            Debug.LogError("RoadUtilities.GetProjectionTo called with bad distance sign - must be positive if projecting with the first derivative and negative if against.");
-            return new Tuple<double, double>(double.NaN, double.NaN);
-        }
+            Debug.LogWarning("RoadUtilities.GetProjectionTo called with bad distance sign (" + distance + "). Must be positive if projecting with the tangent and negative if against.");
 
-        var finalDistance = arcLengthValues[0] * startRoot * startRoot + arcLengthValues[1] * startRoot + distance;
-        var endDistance = arcLengthValues[0] * endRoot * endRoot + arcLengthValues[1] * endRoot;
+        var finalDistance = arcLengthValues[0] * startRoot * startRoot * startRoot +
+                            arcLengthValues[1] * startRoot * startRoot +
+                            arcLengthValues[2] * startRoot + distance;
+        var endDistance = arcLengthValues[0] * endRoot * endRoot * endRoot +
+                          arcLengthValues[1] * endRoot * endRoot +
+                          arcLengthValues[2] * endRoot;
 
-        if (distance < 0)
-            return finalDistance < endDistance ?
-                       new Tuple<double, double>(finalDistance - endDistance, endRoot) :
-                       new Tuple<double, double>(0, invarcLengthValues[0] * finalDistance * finalDistance + invarcLengthValues[1] * finalDistance);
-        else
-            return finalDistance > endDistance ?
-                       new Tuple<double, double>(finalDistance - endDistance, endRoot) :
-                       new Tuple<double, double>(0, invarcLengthValues[0] * finalDistance * finalDistance + invarcLengthValues[1] * finalDistance);
+        if (distance < 0 && finalDistance < endDistance || distance > 0 && finalDistance > endDistance) return new Tuple<double, double>(finalDistance - endDistance, endRoot);
+        return new Tuple<double, double>(0, invarcLengthValues[0] * finalDistance * finalDistance * finalDistance +
+                                            invarcLengthValues[1] * finalDistance * finalDistance +
+                                            invarcLengthValues[2] * finalDistance);
     }
 }
 

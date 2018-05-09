@@ -9,56 +9,44 @@ public class PiavRoadAgent : MonoBehaviour
     [Tooltip("Top-down dimensions <width,height>")]
     public Vector2 Dimensions;
 
-    private Vector3 _curPos;
+    private double _curRt = double.NaN;
+    private Segment _curSgm;
+    private double  _curDirSp = double.NaN;
+    private double  _curAbsSp = double.NaN;
+    private Vector3? _curMdir;
+    private Vector3? _curFdir;
+    private Vector3? _curPos;
 
-    public Vector3 CurrentPosition
+    public Vector3? CurrentPosition
     {
         get { return _curPos; }
         internal set { _curPos = value; }
     }
-
-    private Vector3 _curFdir;
-
-    public Vector3 CurrentFacingDirection
+    public Vector3? CurrentFacingDirection
     {
         get { return _curFdir; }
         internal set { _curFdir = value; }
     }
-
-    private Vector3 _curMdir;
-
-    public Vector3 CurrentMovingDirection
+    public Vector3? CurrentMovingDirection
     {
         get { return _curMdir; }
         internal set { _curMdir = value; }
     }
-
-    private double _curAbsSp;
-
     public double CurrentAbsoluteSpeed
     {
         get { return _curAbsSp; }
         internal set { _curAbsSp = value; }
     }
-
-    private double _curDirSp;
-
     public double CurrentDirectionalSpeed
     {
         get { return _curDirSp; }
         internal set { _curDirSp = value; }
     }
-
-    private Segment _curSgm;
-
     public Segment CurrentSegment
     {
         get { return _curSgm; }
         internal set { _curSgm = value; }
     }
-
-    private double _curRt;
-
     public double CurrentRoot
     {
         get { return _curRt; }

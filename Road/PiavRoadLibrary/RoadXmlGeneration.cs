@@ -52,8 +52,10 @@ internal static class RoadXmlGeneration
             MakeSegmentNode(core, laneNode, id * 1000 + i + 1, target._lanePolynoms[j, i],
                             target._arcLengthRegressionValues[j, i, 0, 0],
                             target._arcLengthRegressionValues[j, i, 0, 1],
+                            target._arcLengthRegressionValues[j, i, 0, 2],
                             target._arcLengthRegressionValues[j, i, 1, 0],
-                            target._arcLengthRegressionValues[j, i, 1, 1]);
+                            target._arcLengthRegressionValues[j, i, 1, 1],
+                            target._arcLengthRegressionValues[j, i, 1, 2]);
         }
 
         var aidl       = core.CreateAttribute("idl");
@@ -82,7 +84,7 @@ internal static class RoadXmlGeneration
         }
     }
 
-    private static void MakeSegmentNode(XmlDocument core, XmlNode parent, long id, QuadraticPolynomial p, double a1, double a2, double b1, double b2)
+    private static void MakeSegmentNode(XmlDocument core, XmlNode parent, long id, QuadraticPolynomial p, double a1, double a2, double a3, double b1, double b2, double b3)
     {
         var     coeffs      = p._coeffs;
         XmlNode segmentNode = core.CreateElement("Segment");
@@ -98,10 +100,12 @@ internal static class RoadXmlGeneration
         var at0X        = core.CreateAttribute("cx");
         var at0Y        = core.CreateAttribute("cy");
         var at0Z        = core.CreateAttribute("cz");
-        var aarcLen2    = core.CreateAttribute("al");
-        var aarcLen     = core.CreateAttribute("bl");
-        var ainvArcLen2 = core.CreateAttribute("la");
-        var ainvArcLen  = core.CreateAttribute("lb");
+        var aarcLen3    = core.CreateAttribute("al");
+        var aarcLen2     = core.CreateAttribute("bl");
+        var aarcLen = core.CreateAttribute("cl");
+        var ainvArcLen3 = core.CreateAttribute("la");
+        var ainvArcLen2  = core.CreateAttribute("lb");
+        var ainvArcLen = core.CreateAttribute("lc");
         var aid         = core.CreateAttribute("id");
 
         at2X.Value        = coeffs[0, 0].ToString("n4", CultureInfo.InvariantCulture);
@@ -113,10 +117,12 @@ internal static class RoadXmlGeneration
         at0X.Value        = coeffs[2, 0].ToString("n4", CultureInfo.InvariantCulture);
         at0Y.Value        = coeffs[2, 1].ToString("n4", CultureInfo.InvariantCulture);
         at0Z.Value        = coeffs[2, 2].ToString("n4", CultureInfo.InvariantCulture);
-        aarcLen2.Value    = a1.ToString("n6", CultureInfo.InvariantCulture);
-        aarcLen.Value     = a2.ToString("n6", CultureInfo.InvariantCulture);
-        ainvArcLen2.Value = b1.ToString("n6", CultureInfo.InvariantCulture);
-        ainvArcLen.Value  = b2.ToString("n6", CultureInfo.InvariantCulture);
+        aarcLen3.Value = a1.ToString("n6", CultureInfo.InvariantCulture);
+        aarcLen2.Value    = a2.ToString("n6", CultureInfo.InvariantCulture);
+        aarcLen.Value     = a3.ToString("n6", CultureInfo.InvariantCulture);
+        ainvArcLen3.Value = b1.ToString("n6", CultureInfo.InvariantCulture);
+        ainvArcLen2.Value = b2.ToString("n6", CultureInfo.InvariantCulture);
+        ainvArcLen.Value  = b3.ToString("n6", CultureInfo.InvariantCulture);
         aid.Value         = id.ToString();
 
         if (segmentNode.Attributes != null)
@@ -130,8 +136,10 @@ internal static class RoadXmlGeneration
             segmentNode.Attributes.Append(at0X);
             segmentNode.Attributes.Append(at0Y);
             segmentNode.Attributes.Append(at0Z);
+            segmentNode.Attributes.Append(aarcLen3);
             segmentNode.Attributes.Append(aarcLen2);
             segmentNode.Attributes.Append(aarcLen);
+            segmentNode.Attributes.Append(ainvArcLen3);
             segmentNode.Attributes.Append(ainvArcLen2);
             segmentNode.Attributes.Append(ainvArcLen);
             segmentNode.Attributes.Append(aid);
