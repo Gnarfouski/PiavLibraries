@@ -1,6 +1,15 @@
-﻿public class LaneContact : Contact
+﻿public class LaneContact
 {
     public LaneContact(Segment origin, Segment target)
-        : base(origin, target)
-    { }
+    {
+        Origin = origin;
+        Target = target;
+    }
+
+    #region Variables
+
+    public Segment Origin;
+    public Segment Target;
+
+    #endregion
 }

@@ -46,7 +46,6 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="PiavAgentSummaryWindow.cs" />
-    <Compile Include="Contact.cs" />
     <Compile Include="LaneContact.cs" />
     <Compile Include="ParkingSpace.cs" />
     <Compile Include="PointContact.cs" />

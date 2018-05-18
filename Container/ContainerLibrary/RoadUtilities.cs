@@ -243,17 +243,19 @@ public static class RoadUtilities {
             return new Tuple<double, double>(double.NaN, double.NaN);
         }
 
-        if (startRoot > endRoot && distance > 0 || startRoot < endRoot && distance < 0)
-            Debug.LogWarning("RoadUtilities.GetProjectionTo called with bad distance sign (" + distance + "). Must be positive if projecting with the tangent and negative if against.");
+        var stRoot = distance < 0 ? Math.Max(startRoot, endRoot) : Math.Min(startRoot,endRoot);
+        var enRoot = distance < 0 ? Math.Min(startRoot, endRoot) : Math.Max(startRoot,endRoot);
 
-        var finalDistance = arcLengthValues[0] * startRoot * startRoot * startRoot +
-                            arcLengthValues[1] * startRoot * startRoot +
-                            arcLengthValues[2] * startRoot + distance;
-        var endDistance = arcLengthValues[0] * endRoot * endRoot * endRoot +
-                          arcLengthValues[1] * endRoot * endRoot +
-                          arcLengthValues[2] * endRoot;
 
-        if (distance < 0 && finalDistance < endDistance || distance > 0 && finalDistance > endDistance) return new Tuple<double, double>(finalDistance - endDistance, endRoot);
+        var finalDistance = arcLengthValues[0] * stRoot * stRoot * stRoot +
+                            arcLengthValues[1] * stRoot * stRoot +
+                            arcLengthValues[2] * stRoot +
+                            distance;
+        var endDistance = arcLengthValues[0] * enRoot * enRoot * enRoot +
+                          arcLengthValues[1] * enRoot * enRoot +
+                          arcLengthValues[2] * enRoot;
+
+        if (finalDistance - endDistance > 0) return new Tuple<double, double>(finalDistance - endDistance, endRoot);
         return new Tuple<double, double>(0, invarcLengthValues[0] * finalDistance * finalDistance * finalDistance +
                                             invarcLengthValues[1] * finalDistance * finalDistance +
                                             invarcLengthValues[2] * finalDistance);

@@ -49,7 +49,10 @@ public class PiavRoadContainer : MonoBehaviour
             Debug.LogError("RoadContainer : No XML file to load.");
         }
 
+        for (int i = 0; i < _segments.Count; i++) _segments[i].SelfIndex = i;
+
         BuildDualGraph();
+        LinkDualGraph();
 
         foreach (var agent in (PiavRoadAgent[])FindObjectsOfType(typeof(PiavRoadAgent))) _cars.Add(agent);
     }
@@ -65,16 +68,17 @@ public class PiavRoadContainer : MonoBehaviour
                 car.CurrentMovingDirection = positionDelta.Value.normalized;
             }
 
-            car.CurrentPosition        = car.transform.position;
+            var posWithoutY = car.transform.position;
+            posWithoutY.y = 0;
+            car.CurrentPosition        = posWithoutY;
             car.CurrentFacingDirection = car.transform.forward;
 
             var closestSegment = FindClosestSegmentWithinLaneWidth(car.CurrentPosition.Value, LaneType.Vehicle);
-
-            if (closestSegment != null)
-            {
-                car.CurrentSegment = closestSegment.Item1;
-                car.CurrentRoot    = closestSegment.Item2;
-            }
+                if (closestSegment != null && (car.DesiredIncomingPath == null ||car.DesiredIncomingPath.Count==0))
+                {
+                    car.CurrentSegment = closestSegment.Item1;
+                    car.CurrentRoot    = closestSegment.Item2;
+                }
 
             car.CurrentDirectionalSpeed = car.CurrentSegment != null ?
                                               car.CurrentAbsoluteSpeed *
@@ -87,12 +91,130 @@ public class PiavRoadContainer : MonoBehaviour
 
     private void BuildDualGraph()
     {
-        var tempVertices = new List<DualVertice>();
+        var tempDualGraph = new List<DualVertex>[_segments.Count];
 
-        foreach (var segment in _segments)
+        for (int i = 0; i < _segments.Count; i++)
         {
-            
+            var divergenceRoots = new List<double>();
+
+            foreach (var c in _segments[i].Contacts) divergenceRoots.Add(c.OriginRoot);
+            foreach (var c in _segments[i].IncomingContacts) divergenceRoots.Add(c.TargetRoot);
+
+            divergenceRoots.Sort();
+
+            int countToDelete = 0;
+
+            for (int j = 0; j < divergenceRoots.Count - 1; j++)
+            {
+                if (divergenceRoots[j + 1] - divergenceRoots[j] < 0.01)
+                {
+                    divergenceRoots[j] = 0;
+                    countToDelete++;
+                }
+            }
+
+            divergenceRoots.Sort();
+
+            while (countToDelete > 0)
+            {
+                divergenceRoots.RemoveAt(0);
+                countToDelete--;
+            }
+
+            tempDualGraph[i] = new List<DualVertex>();
+
+            for (int j = 0; j < divergenceRoots.Count - 1; j++) tempDualGraph[i].Add(new DualVertex(divergenceRoots[j], divergenceRoots[j + 1], _segments[i]));
         }
+
+        for (int i = 0; i < _segments.Count; i++)
+        {
+            if (_segments[i].ParentLane.Direction)
+                for (int j = 0; j < tempDualGraph[i].Count - 1; j++)
+                {
+                    tempDualGraph[i][j].Predecessors.Add(tempDualGraph[i][j+1]);
+                    tempDualGraph[i][j+1].Followers.Add(tempDualGraph[i][j]);
+                }
+            else
+                for (int j = 0; j < tempDualGraph[i].Count - 1; j++)
+                {
+                    tempDualGraph[i][j].Followers.Add(tempDualGraph[i][j + 1]);
+                    tempDualGraph[i][j + 1].Predecessors.Add(tempDualGraph[i][j]);
+                }
+        }
+        for (int i = 0; i < _segments.Count; i++)
+        {
+            //Debug.Log("*** From " + _segments[i].Id);
+
+            foreach (var c in _segments[i].Contacts)
+            {
+                //Debug.Log(_segments[c.Target.SelfIndex].Id);
+
+                var originVertice = FindOriginVertice(tempDualGraph[i], i, c.OriginRoot);
+                var targetVertice = FindTargetVertice(tempDualGraph[c.Target.SelfIndex], c.Target.SelfIndex, c.TargetRoot);
+
+                if (originVertice != null && targetVertice != null)
+                {
+                    originVertice.Followers.Add(targetVertice);
+                    targetVertice.Predecessors.Add(originVertice);
+                }
+            }
+        }
+        foreach (var collection in tempDualGraph)
+        {
+            foreach (var dv in collection) dv.Distance = RoadUtilities.GetArcLengthBetween(dv.ParentSegmentPart.Item1.ArcLength, dv.ParentSegmentPart.Item2, dv.ParentSegmentPart.Item3);
+            DualGraph.AddRange(collection);
+        }
+    }
+
+    private void PrintDualGraph()
+    {
+        for (int i = 0; i < DualGraph.Count; i++)
+        {
+            string s = "DV " +
+                       i +
+                       " " +
+                       DualGraph[i].ParentSegmentPart.Item1.Id +
+                       " " +
+                       DualGraph[i].ParentSegmentPart.Item2 +
+                       " " +
+                       DualGraph[i].ParentSegmentPart.Item3 + " " + DualGraph[i].Distance + "\nFl : ";
+
+            foreach (var fol in DualGraph[i].Followers) s   += DualGraph.IndexOf(fol) + " ";
+            s                                               += "\nPr : ";
+            foreach (var pr in DualGraph[i].Predecessors) s += DualGraph.IndexOf(pr) + " ";
+            Debug.Log(s);
+        }
+    }
+
+    private void LinkDualGraph()
+    {
+        foreach (var dv in DualGraph) dv.ParentSegmentPart.Item1.DualVertices.Add(dv);
+    }
+
+    private DualVertex FindOriginVertice(List<DualVertex> list, int i, double originRoot)
+    {
+        foreach (var tdv in list)
+        {
+            if (_segments[i].ParentLane.Direction && Math.Abs(originRoot - tdv.ParentSegmentPart.Item2) < 0.011 ||
+                !_segments[i].ParentLane.Direction && Math.Abs(originRoot - tdv.ParentSegmentPart.Item3) < 0.011)
+                return tdv;
+        }
+        //Debug.LogError("Origin Vertice Not Found");
+        return null;
+    }
+
+    private DualVertex FindTargetVertice(List<DualVertex> list, int i, double targetRoot)
+    {
+        foreach (var tdv in list)
+        {
+
+
+            if (_segments[i].ParentLane.Direction && Math.Abs(targetRoot - tdv.ParentSegmentPart.Item3) < 0.011 ||
+                !_segments[i].ParentLane.Direction && Math.Abs(targetRoot - tdv.ParentSegmentPart.Item2) < 0.011)
+                return tdv;
+        }
+        //Debug.LogError("Target Vertice Not Found");
+        return null;
     }
 
     private void LoadRoadNode(XmlNode n)
@@ -239,12 +361,10 @@ public class PiavRoadContainer : MonoBehaviour
                         for (int j = 0; j < road.ChildLanes[i].ChildSegments.Length; j++)
                         {
                             var lc1 = new LaneContact(road.ChildLanes[i].ChildSegments[j], road.ChildLanes[i + 1].ChildSegments[j]);
-                            road.ChildLanes[i].ChildSegments[j].Contacts.Add(lc1);
-                            road.ChildLanes[i + 1].ChildSegments[j].IncomingContacts.Add(lc1);
+                            road.ChildLanes[i].ChildSegments[j].LaneContacts.Add(lc1);
 
                             var lc2 = new LaneContact(road.ChildLanes[i + 1].ChildSegments[j], road.ChildLanes[i].ChildSegments[j]);
-                            road.ChildLanes[i].ChildSegments[j].IncomingContacts.Add(lc2);
-                            road.ChildLanes[i + 1].ChildSegments[j].Contacts.Add(lc2);
+                            road.ChildLanes[i + 1].ChildSegments[j].LaneContacts.Add(lc2);
                         }
 
                     for (int j = 0; j < road.ChildLanes[i].ChildSegments.Length - 1; j++)
@@ -880,6 +1000,11 @@ public class PiavRoadContainer : MonoBehaviour
         return null;
     }
 
+    public Tuple<Segment, double> FindRandomSegmentAndRoot()
+    {
+        return new Tuple<Segment, double>(_segments[(int)(UnityEngine.Random.value * _segments.Count)],UnityEngine.Random.value);
+    }
+
     internal Tuple<Segment, double> FindClosestAdjacentSegment(Vector3 pos, Segment originSegment)
     {
         Segment closestSegment  = null;
@@ -922,6 +1047,7 @@ public class PiavRoadContainer : MonoBehaviour
     {
         if(_showRoadGizmos) DrawRoadGizmos();
         if (_showRequestedGizmos) DrawRequestedGizmos();
+        if (_showDualGizmos) DrawDualGizmos();
     }
 
     private void DrawRoadGizmos()
@@ -936,24 +1062,20 @@ public class PiavRoadContainer : MonoBehaviour
 
                 foreach (var c in s.Contacts)
                 {
-                    //Debug.Log(c.GetType());
-
-                    if (c.GetType() == typeof(PointContact))
-                    {
                         Gizmos.color = Color.red;
-                        var v1       = RoadUtilities.Calculate(c.Origin.Polynomial, ((PointContact)c).OriginRoot);
-                        var v2       = RoadUtilities.Calculate(c.Target.Polynomial, ((PointContact)c).TargetRoot);
+                        var v1       = RoadUtilities.Calculate(c.Origin.Polynomial, c.OriginRoot);
+                        var v2       = RoadUtilities.Calculate(c.Target.Polynomial, c.TargetRoot);
                         Gizmos.DrawLine(v1, v2);
-                    }
-                    else if (c.GetType() == typeof(LaneContact))
-                    {
-                        Gizmos.color = Color.blue;
-                        var v1       = RoadUtilities.Calculate(c.Origin.Polynomial, 0.5);
-                        var v2       = RoadUtilities.Calculate(c.Target.Polynomial, 0.5);
-                        Gizmos.DrawSphere(v1, 0.4f);
-                        Gizmos.DrawSphere(v2, 0.4f);
-                        Gizmos.DrawLine(v1, v2);
-                    }
+                }
+
+                foreach (var c in s.LaneContacts)
+                {
+                    Gizmos.color = Color.blue;
+                    var v1       = RoadUtilities.Calculate(c.Origin.Polynomial, 0.5);
+                    var v2       = RoadUtilities.Calculate(c.Target.Polynomial, 0.5);
+                    Gizmos.DrawSphere(v1, 0.4f);
+                    Gizmos.DrawSphere(v2, 0.4f);
+                    Gizmos.DrawLine(v1, v2);
                 }
 
                 foreach (var stp in s.Stops)
@@ -972,6 +1094,19 @@ public class PiavRoadContainer : MonoBehaviour
             }
     }
 
+    private void DrawDualGizmos()
+    {
+        Gizmos.color = Color.white;
+
+        if (_segments != null && _segments.Count != 0 && DualGraph.Count != 0)
+            foreach (var dv in DualGraph)
+            {
+                var st = RoadUtilities.Calculate(dv.ParentSegmentPart.Item1.Polynomial, dv.ParentSegmentPart.Item2);
+                var en = RoadUtilities.Calculate(dv.ParentSegmentPart.Item1.Polynomial, dv.ParentSegmentPart.Item3);
+                Gizmos.DrawLine(st, en);
+            }
+    }
+
     private void DrawRequestedGizmos()
     {
         foreach (var t in GizmosRequests)
@@ -986,6 +1121,7 @@ public class PiavRoadContainer : MonoBehaviour
 
     [SerializeField] internal bool _showRoadGizmos;
     [SerializeField] internal bool _showRequestedGizmos;
+    [SerializeField] internal bool _showDualGizmos;
 
     internal List<ParkingSpace> _parkingSpaces;
     internal List<Road> _roads;
@@ -993,17 +1129,37 @@ public class PiavRoadContainer : MonoBehaviour
     internal List<Segment> _segments;
     internal List<PiavRoadAgent> _cars;
 
-    [HideInInspector] public List<DualVertice> DualGraph = new List<DualVertice>();
+    [HideInInspector] public List<DualVertex> DualGraph = new List<DualVertex>();
     [HideInInspector] public List<Tuple<List<Vector3>, Type, Color>> GizmosRequests = new List<Tuple<List<Vector3>, Type, Color>>();
 
     #endregion
 }
 
-public class DualVertice
+public class DualVertex
 {
-    public List<DualVertice> Followers = new List<DualVertice>();
-    public double Distance;
-    public List<Tuple<Segment, double, double>> ParentSegments = new List<Tuple<Segment, double, double>>();
+    internal DualVertex(double startRt, double endRt, Segment parent)
+    {
+        ParentSegmentPart = new Tuple<Segment, double, double>(parent,startRt,endRt);
+    }
+
+    public List<DualVertex> Predecessors = new List<DualVertex>();
+    public List<DualVertex> Followers    = new List<DualVertex>();
+
+    public double                               Distance;
+    public Tuple<Segment, double, double> ParentSegmentPart;
+
+    public double AccumulatedDistance;
+    public DualVertex PathPredecessor;
+
+    #region Overrides of Object
+
+    /// <inheritdoc />
+    public override string ToString()
+    {
+        return "Dual Vertice " + ParentSegmentPart.Item1.Id + " (" + ParentSegmentPart.Item2 + " - " + ParentSegmentPart.Item3 + ")";
+    }
+
+    #endregion
 }
 
 internal enum ContactStart
