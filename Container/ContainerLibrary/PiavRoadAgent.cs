@@ -9,48 +9,41 @@ public class PiavRoadAgent : MonoBehaviour
     [Tooltip("Top-down dimensions <width,height>")]
     public Vector2 Dimensions;
 
-    private double _curRt = double.NaN;
-    private Segment _curSgm;
-    private double  _curDirSp = double.NaN;
+    [Tooltip("Segment, root, distance, currentDot")]
+    private List<Tuple<Segment, double,double,double>> _curSgm;
     private double  _curAbsSp = double.NaN;
-    private Vector3? _curMdir;
-    private Vector3? _curFdir;
-    private Vector3? _curPos;
+    //private Vector3 _curMdir;
+    private Vector3 _curFdir;
+    private Vector3 _curPos;
 
-    public Vector3? CurrentPosition
+    internal Vector3 CurrentPosition
     {
         get { return _curPos; }
-        internal set { _curPos = value; }
+        set { _curPos = value; }
     }
-    public Vector3? CurrentFacingDirection
+
+    internal Vector3 CurrentFacingDirection
     {
         get { return _curFdir; }
-        internal set { _curFdir = value; }
+        set { _curFdir = value; }
     }
-    public Vector3? CurrentMovingDirection
+    /*
+    internal Vector3 CurrentMovingDirection
     {
         get { return _curMdir; }
-        internal set { _curMdir = value; }
+        set { _curMdir = value; }
     }
-    public double CurrentAbsoluteSpeed
+    */
+    internal double CurrentAbsoluteSpeed
     {
         get { return _curAbsSp; }
-        internal set { _curAbsSp = value; }
+        set { _curAbsSp = value; }
     }
-    public double CurrentDirectionalSpeed
-    {
-        get { return _curDirSp; }
-        internal set { _curDirSp = value; }
-    }
-    public Segment CurrentSegment
+
+    internal List<Tuple<Segment,double,double,double>> CurrentSegments
     {
         get { return _curSgm; }
-        internal set { _curSgm = value; }
-    }
-    public double CurrentRoot
-    {
-        get { return _curRt; }
-        internal set { _curRt = value; }
+        set { _curSgm = value; }
     }
 
     // ****************************

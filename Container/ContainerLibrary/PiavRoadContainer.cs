@@ -55,37 +55,33 @@ public class PiavRoadContainer : MonoBehaviour
         LinkDualGraph();
 
         foreach (var agent in (PiavRoadAgent[])FindObjectsOfType(typeof(PiavRoadAgent))) _cars.Add(agent);
+
+        foreach (var car in _cars)
+        {
+            car.CurrentPosition        = car.transform.position;
+            car.CurrentFacingDirection = car.transform.forward;
+
+            car.CurrentAbsoluteSpeed   = 0;
+
+            var closestSegments                                 = FindAllSegmentsWithinLaneWidth(car.CurrentPosition, LaneType.Vehicle, car.CurrentFacingDirection);
+            if (closestSegments.Count != 0) car.CurrentSegments = closestSegments;
+            else car.CurrentSegments.Clear();
+        }
     }
 
     private void Update()
     {
         foreach (var car in _cars)
         {
-            if (car.CurrentPosition.HasValue)
-            {
-                var positionDelta          = car.transform.position - car.CurrentPosition;
-                car.CurrentAbsoluteSpeed   = positionDelta.Value.magnitude / Time.deltaTime;
-                car.CurrentMovingDirection = positionDelta.Value.normalized;
-            }
+            var positionDelta          = car.transform.position - car.CurrentPosition;
+            car.CurrentAbsoluteSpeed   = positionDelta.magnitude / Time.deltaTime;
 
-            var posWithoutY = car.transform.position;
-            posWithoutY.y = 0;
-            car.CurrentPosition        = posWithoutY;
+            car.CurrentPosition        = car.transform.position;
             car.CurrentFacingDirection = car.transform.forward;
 
-            var closestSegment = FindClosestSegmentWithinLaneWidth(car.CurrentPosition.Value, LaneType.Vehicle);
-                if (closestSegment != null && (car.DesiredIncomingPath == null ||car.DesiredIncomingPath.Count==0))
-                {
-                    car.CurrentSegment = closestSegment.Item1;
-                    car.CurrentRoot    = closestSegment.Item2;
-                }
-
-            car.CurrentDirectionalSpeed = car.CurrentSegment != null ?
-                                              car.CurrentAbsoluteSpeed *
-                                              Vector3.Dot(car.CurrentFacingDirection.Value,
-                                                          RoadUtilities.CalculateFirstDerivative(car.CurrentSegment.Polynomial, car.CurrentRoot).normalized) *
-                                              (car.CurrentSegment.ParentLane.Direction ? -1 : 1) :
-                                              car.CurrentAbsoluteSpeed;
+            var closestSegments = FindAllSegmentsWithinLaneWidth(car.CurrentPosition, LaneType.Vehicle, car.CurrentFacingDirection);
+                if (closestSegments.Count != 0) car.CurrentSegments = closestSegments;
+                else car.CurrentSegments.Clear();
         }
     }
 
@@ -123,7 +119,9 @@ public class PiavRoadContainer : MonoBehaviour
 
             tempDualGraph[i] = new List<DualVertex>();
 
-            for (int j = 0; j < divergenceRoots.Count - 1; j++) tempDualGraph[i].Add(new DualVertex(divergenceRoots[j], divergenceRoots[j + 1], _segments[i]));
+            for (int j = 0; j < divergenceRoots.Count - 1; j++)
+                tempDualGraph[i].Add(new DualVertex(i * 10 + j, j == 0 ? 0:divergenceRoots[j], j == divergenceRoots.Count - 2 ? 1:divergenceRoots[j + 1], _segments[i]));
+
         }
 
         for (int i = 0; i < _segments.Count; i++)
@@ -166,6 +164,7 @@ public class PiavRoadContainer : MonoBehaviour
         }
     }
 
+    // ReSharper disable once UnusedMember.Local
     private void PrintDualGraph()
     {
         for (int i = 0; i < DualGraph.Count; i++)
@@ -317,12 +316,12 @@ public class PiavRoadContainer : MonoBehaviour
             }
         };
 
-        var arcL = Math.Sqrt(Math.Pow(myPoly[1, 0] + myPoly[2, 0], 2) + Math.Pow(myPoly[1, 1] + myPoly[2, 1], 2) + Math.Pow(myPoly[1, 2] + myPoly[2, 2], 2));
+        var arcL = Math.Sqrt(Math.Pow(myPoly[1, 0], 2) + Math.Pow(myPoly[1, 1], 2) + Math.Pow(myPoly[1, 2], 2));
 
 
         return new Segment()
         {
-            Id         = 0,
+            Id         = _segments.Count,
             ParentLane = new Lane()
             {
                 Id            = 0,
@@ -467,7 +466,7 @@ public class PiavRoadContainer : MonoBehaviour
             }
     }
 
-    private void MakeIntermediateContact(Vector3 origin, Vector3 target, Lane parentLane, PointContact cnt)
+    private void MakeIntermediateContact(Vector3 origin, Vector3 target, Lane parentLane, Segment originSg, Segment targetSg, double originRt, double targetRt)
     {
         var cS = CreateContactSegment(
                                       parentLane.MyType,
@@ -478,22 +477,22 @@ public class PiavRoadContainer : MonoBehaviour
         _segments.Add(cS);
 
         var c1 = new PointContact(
-                                  cnt.OriginRoot,
+                                  originRt,
                                   0,
-                                  cnt.Origin,
+                                  originSg,
                                   cS);
 
-        cnt.Origin.Contacts.Add(c1);
+        originSg.Contacts.Add(c1);
         cS.IncomingContacts.Add(c1);
 
         var c2 = new PointContact(
                                   1,
-                                  cnt.TargetRoot,
+                                  targetRt,
                                   cS,
-                                  cnt.Target);
+                                  targetSg);
 
         cS.Contacts.Add(c2);
-        cnt.Target.IncomingContacts.Add(c2);
+        targetSg.IncomingContacts.Add(c2);
     }
 
     private void LoadStartStartContact(Road originRoad, Road targetRoad)
@@ -520,7 +519,7 @@ public class PiavRoadContainer : MonoBehaviour
                     }
                     else
                     {
-                        MakeIntermediateContact(originPoint, targetPoint, targetRoad.ChildLanes[originRoad.ChildLanes.Length - 1 - i], c);
+                        MakeIntermediateContact(originPoint, targetPoint, targetRoad.ChildLanes[originRoad.ChildLanes.Length - 1 - i], c.Origin,c.Target,c.OriginRoot,c.TargetRoot);
                     }
                 }
                 else if (!originRoad.ChildLanes[i].Direction && targetRoad.ChildLanes[i].Direction)
@@ -538,7 +537,7 @@ public class PiavRoadContainer : MonoBehaviour
                     }
                     else
                     {
-                        MakeIntermediateContact(targetPoint, originPoint, originRoad.ChildLanes[i], c);
+                        MakeIntermediateContact(targetPoint, originPoint, originRoad.ChildLanes[i], c.Origin, c.Target, c.OriginRoot, c.TargetRoot);
                     }
                 }
             }
@@ -569,7 +568,7 @@ public class PiavRoadContainer : MonoBehaviour
                     }
                     else
                     {
-                        MakeIntermediateContact(targetPoint, originPoint, originRoad.ChildLanes[i],c);
+                        MakeIntermediateContact(targetPoint, originPoint, originRoad.ChildLanes[i], c.Origin, c.Target, c.OriginRoot, c.TargetRoot);
                     }
                 }
                 else if (!originRoad.ChildLanes[i].Direction && !targetRoad.ChildLanes[i].Direction)
@@ -587,7 +586,7 @@ public class PiavRoadContainer : MonoBehaviour
                     }
                     else
                     {
-                        MakeIntermediateContact(originPoint, targetPoint, targetRoad.ChildLanes[i], c);
+                        MakeIntermediateContact(originPoint, targetPoint, targetRoad.ChildLanes[i], c.Origin, c.Target, c.OriginRoot, c.TargetRoot);
                     }
                 }
             }
@@ -618,7 +617,7 @@ public class PiavRoadContainer : MonoBehaviour
                     }
                     else
                     {
-                        MakeIntermediateContact(originPoint, targetPoint, targetRoad.ChildLanes[i], c);
+                        MakeIntermediateContact(originPoint, targetPoint, targetRoad.ChildLanes[i], c.Origin, c.Target, c.OriginRoot, c.TargetRoot);
                     }
                 }
                 else if (!originRoad.ChildLanes[i].Direction && !targetRoad.ChildLanes[i].Direction)
@@ -636,7 +635,7 @@ public class PiavRoadContainer : MonoBehaviour
                     }
                     else
                     {
-                        MakeIntermediateContact(targetPoint, originPoint, originRoad.ChildLanes[i], c);
+                        MakeIntermediateContact(targetPoint, originPoint, originRoad.ChildLanes[i], c.Origin, c.Target, c.OriginRoot, c.TargetRoot);
                     }
                 }
             }
@@ -671,7 +670,7 @@ public class PiavRoadContainer : MonoBehaviour
                     }
                 else
                 {
-                    MakeIntermediateContact(targetPoint, originPoint, originRoad.ChildLanes[i], c);
+                    MakeIntermediateContact(targetPoint, originPoint, originRoad.ChildLanes[i], c.Origin, c.Target, c.OriginRoot, c.TargetRoot);
                 }
             }
                 else if (!originRoad.ChildLanes[i].Direction && targetRoad.ChildLanes[i].Direction)
@@ -693,7 +692,7 @@ public class PiavRoadContainer : MonoBehaviour
                     }
                     else
                     {
-                        MakeIntermediateContact(originPoint, targetPoint, targetRoad.ChildLanes[targetRoad.ChildLanes.Length - 1 - i], c);
+                        MakeIntermediateContact(originPoint, targetPoint, targetRoad.ChildLanes[targetRoad.ChildLanes.Length - 1 - i], c.Origin, c.Target, c.OriginRoot, c.TargetRoot);
                     }
                 }
             }
@@ -715,37 +714,35 @@ public class PiavRoadContainer : MonoBehaviour
                         if (targetSegmentRoot != null && targetSegmentRoot.Item1 != null)
                             if (originLane.Direction)
                             {
-                                var finalTargetRoot = RoadUtilities.GetProjection(targetSegmentRoot.Item1.ArcLength, targetSegmentRoot.Item1.InvArcLength, targetSegmentRoot.Item2, targetLane.Direction ? 4 : -4);
-
-                                var cS = CreateContactSegment(targetLane.MyType, targetLane.SpeedLimit, targetLane.Width,
-                                                              RoadUtilities.Calculate(targetSegmentRoot.Item1.Polynomial, finalTargetRoot.Item2), originPoint);
-                                _segments.Add(cS);
-
-                                var c1         = new PointContact(finalTargetRoot.Item2, 0,
-                                                                  targetSegmentRoot.Item1, cS);
-                                targetSegmentRoot.Item1.Contacts.Add(c1);
-                                cS.IncomingContacts.Add(c1);
-
-                                var c2 = new PointContact(1, 1,
-                                                          cS, originLane.ChildSegments[originLane.ChildSegments.Length - 1]);
-                                cS.Contacts.Add(c2);
-                                originLane.ChildSegments[originLane.ChildSegments.Length - 1].IncomingContacts.Add(c2);
+                                var finalTargetRoot = RoadUtilities.GetProjection(
+                                                                                  targetSegmentRoot.Item1.ArcLength,
+                                                                                  targetSegmentRoot.Item1.InvArcLength,
+                                                                                  targetSegmentRoot.Item2,
+                                                                                  targetLane.Direction ? 4 : -4);
+                                MakeIntermediateContact(
+                                                        RoadUtilities.Calculate(targetSegmentRoot.Item1.Polynomial, finalTargetRoot.Item2),
+                                                        originPoint,
+                                                        originLane,
+                                                        targetSegmentRoot.Item1,
+                                                        originLane.ChildSegments[originLane.ChildSegments.Length - 1],
+                                                        finalTargetRoot.Item2,
+                                                        1);
                             }
                             else
                             {
-                                var finalTargetRoot = RoadUtilities.GetProjection(targetSegmentRoot.Item1.ArcLength, targetSegmentRoot.Item1.InvArcLength, targetSegmentRoot.Item2, targetLane.Direction ? -4 : 4);
-
-                                var cS = CreateContactSegment(targetLane.MyType, targetLane.SpeedLimit, targetLane.Width,
-                                                              originPoint, RoadUtilities.Calculate(targetSegmentRoot.Item1.Polynomial, finalTargetRoot.Item2));
-                                _segments.Add(cS);
-
-                                var c1         = new PointContact(1, 0, originLane.ChildSegments[originLane.ChildSegments.Length - 1], cS);
-                                originLane.ChildSegments[originLane.ChildSegments.Length - 1].Contacts.Add(c1);
-                                cS.IncomingContacts.Add(c1);
-
-                                var c2 = new PointContact(1, finalTargetRoot.Item2, cS, targetSegmentRoot.Item1);
-                                cS.Contacts.Add(c2);
-                                targetSegmentRoot.Item1.IncomingContacts.Add(c2);
+                                var finalTargetRoot = RoadUtilities.GetProjection(
+                                                                                  targetSegmentRoot.Item1.ArcLength,
+                                                                                  targetSegmentRoot.Item1.InvArcLength,
+                                                                                  targetSegmentRoot.Item2,
+                                                                                  targetLane.Direction ? -4 : 4);
+                                MakeIntermediateContact(
+                                                        originPoint,
+                                                        RoadUtilities.Calculate(targetSegmentRoot.Item1.Polynomial, finalTargetRoot.Item2),
+                                                        targetLane,
+                                                        originLane.ChildSegments[originLane.ChildSegments.Length - 1],
+                                                        targetSegmentRoot.Item1,
+                                                        1,
+                                                        finalTargetRoot.Item2);
                             }
                     }
                 }
@@ -767,35 +764,36 @@ public class PiavRoadContainer : MonoBehaviour
                         if (targetSegmentRoot != null && targetSegmentRoot.Item1 != null)
                             if (!originLane.Direction)
                             {
-                                var finalTargetRoot = RoadUtilities.GetProjection(targetSegmentRoot.Item1.ArcLength, targetSegmentRoot.Item1.InvArcLength, targetSegmentRoot.Item2, targetLane.Direction ? 4 : -4);
+                                var finalTargetRoot = RoadUtilities.GetProjection(
+                                                                                  targetSegmentRoot.Item1.ArcLength,
+                                                                                  targetSegmentRoot.Item1.InvArcLength,
+                                                                                  targetSegmentRoot.Item2,
+                                                                                  targetLane.Direction ? 4 : -4);
 
-                                var cS = CreateContactSegment(targetLane.MyType, targetLane.SpeedLimit, targetLane.Width,
-                                                              RoadUtilities.Calculate(targetSegmentRoot.Item1.Polynomial, finalTargetRoot.Item2), originPoint);
-                                _segments.Add(cS);
-
-                                var c1 = new PointContact(finalTargetRoot.Item2, 0, targetSegmentRoot.Item1, cS);
-                                targetSegmentRoot.Item1.Contacts.Add(c1);
-                                cS.IncomingContacts.Add(c1);
-
-                                var c2 = new PointContact(1, 0, cS, originLane.ChildSegments[0]);
-                                cS.Contacts.Add(c2);
-                                originLane.ChildSegments[0].IncomingContacts.Add(c2);
+                                MakeIntermediateContact(
+                                                        RoadUtilities.Calculate(targetSegmentRoot.Item1.Polynomial, finalTargetRoot.Item2),
+                                                        originPoint,
+                                                        originLane,
+                                                        targetSegmentRoot.Item1,
+                                                        originLane.ChildSegments[0],
+                                                        finalTargetRoot.Item2,
+                                                        0);
                             }
                             else
                             {
-                                var finalTargetRoot = RoadUtilities.GetProjection(targetSegmentRoot.Item1.ArcLength, targetSegmentRoot.Item1.InvArcLength, targetSegmentRoot.Item2, targetLane.Direction ? -4 : 4);
-
-                                var cS = CreateContactSegment(targetLane.MyType, targetLane.SpeedLimit, targetLane.Width,
-                                                              originPoint, RoadUtilities.Calculate(targetSegmentRoot.Item1.Polynomial, finalTargetRoot.Item2));
-                                _segments.Add(cS);
-
-                                var c1         = new PointContact(0, 0, originLane.ChildSegments[0], cS);
-                                originLane.ChildSegments[0].Contacts.Add(c1);
-                                cS.IncomingContacts.Add(c1);
-
-                                var c2 = new PointContact(1, finalTargetRoot.Item2, cS, targetSegmentRoot.Item1);
-                                cS.Contacts.Add(c2);
-                                targetSegmentRoot.Item1.IncomingContacts.Add(c2);
+                                var finalTargetRoot = RoadUtilities.GetProjection(
+                                                                                  targetSegmentRoot.Item1.ArcLength,
+                                                                                  targetSegmentRoot.Item1.InvArcLength,
+                                                                                  targetSegmentRoot.Item2,
+                                                                                  targetLane.Direction ? -4 : 4);
+                                MakeIntermediateContact(
+                                                        originPoint,
+                                                        RoadUtilities.Calculate(targetSegmentRoot.Item1.Polynomial, finalTargetRoot.Item2),
+                                                        originLane,
+                                                        originLane.ChildSegments[0],
+                                                        targetSegmentRoot.Item1,
+                                                        0,
+                                                        finalTargetRoot.Item2);
                             }
                     }
                 }
@@ -971,36 +969,34 @@ public class PiavRoadContainer : MonoBehaviour
         return null;
     }
 
-    public Tuple<Segment, double> FindClosestSegmentWithinLaneWidth(Vector3 pos, LaneType type)
+    // return segment, root, distance
+    private List<Tuple<Segment, double, double,double>> FindAllSegmentsWithinLaneWidth(Vector3 pos, LaneType type, Vector3 direction)
     {
         if (_segments != null)
         {
-            Segment closestSegment  = null;
-            double  closestRoot     = double.NaN;
-            double  minimalDistance = double.MaxValue;
+            var res = new List<Tuple<Segment, double, double,double>>();
 
             foreach (var segment in _segments)
             {
                 if (segment.ParentLane.MyType == type)
                 {
-                    var possibleRoot = RoadUtilities.GetClosestRoot(segment.Polynomial, pos);
+                    var possibleRoot = RoadUtilities.GetClosestRootWithoutYComponent(segment.Polynomial, pos);
 
-                    if (possibleRoot.Item2 < minimalDistance && possibleRoot.Item2 < segment.ParentLane.Width / 2)
+                    if (possibleRoot.Item2 < segment.ParentLane.Width / 2)
                     {
-                        minimalDistance = possibleRoot.Item2;
-                        closestSegment  = segment;
-                        closestRoot     = possibleRoot.Item1;
+                        var dot = Vector3.Dot(RoadUtilities.CalculateFirstDerivative(segment.Polynomial, possibleRoot.Item1).normalized, direction.normalized);
+                        res.Add(new Tuple<Segment, double, double,double>(segment,possibleRoot.Item1, possibleRoot.Item2,dot/(possibleRoot.Item2 + 1)));
                     }
                 }
             }
-
-            return new Tuple<Segment, double>(closestSegment, closestRoot);
+            res.Sort((t1,t2) => t2.Item4.CompareTo(t1.Item4));
+            return res;
         }
 
-        return null;
+        return new List<Tuple<Segment, double,double,double>>();
     }
 
-    public Tuple<Segment, double> FindRandomSegmentAndRoot()
+    internal Tuple<Segment, double> FindRandomSegmentAndRoot()
     {
         return new Tuple<Segment, double>(_segments[(int)(UnityEngine.Random.value * _segments.Count)],UnityEngine.Random.value);
     }
@@ -1137,11 +1133,13 @@ public class PiavRoadContainer : MonoBehaviour
 
 public class DualVertex
 {
-    internal DualVertex(double startRt, double endRt, Segment parent)
+    internal DualVertex(int id, double startRt, double endRt, Segment parent)
     {
+        Id = id;
         ParentSegmentPart = new Tuple<Segment, double, double>(parent,startRt,endRt);
     }
 
+    public int Id;
     public List<DualVertex> Predecessors = new List<DualVertex>();
     public List<DualVertex> Followers    = new List<DualVertex>();
 

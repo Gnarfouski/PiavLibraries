@@ -2,7 +2,86 @@
 using System;
 using System.Collections.Generic;
 
-public static class RoadUtilities {
+internal static class RoadUtilities {
+
+    internal static Tuple<double, double> GetClosestRootWithoutYComponent(double[,] polynomial, Vector3 pos)
+    {
+        pos.y = 0;
+
+        var a = 4.0 * Math.Pow(polynomial[0, 0], 2) +
+                4.0 * Math.Pow(polynomial[0, 2], 2);
+
+        var b = 6.0 * polynomial[0, 0] * polynomial[1, 0] +
+                6.0 * polynomial[0, 2] * polynomial[1, 2];
+
+        var c = 2.0 * Math.Pow(polynomial[1, 0], 2) +
+                4.0 * polynomial[0, 0] * (polynomial[2, 0] - pos.x) +
+                2.0 * Math.Pow(polynomial[1, 2], 2) +
+                4.0 * polynomial[0, 2] * (polynomial[2, 2] - pos.z);
+
+        var d = 2.0 * polynomial[1, 0] * (polynomial[2, 0] - pos.x) +
+                2.0 * polynomial[1, 2] * (polynomial[2, 2] - pos.z);
+
+        if (Math.Abs(a) > 0.000001)
+        {
+            b = b / a;
+            c = c / a;
+            d = d / a;
+
+            var res = RealRoots(d, c, b);
+
+            var possibleRoots = new List<double>();
+
+            foreach (var root in new[]
+            {
+                res.Item1,
+                res.Item2,
+                res.Item3
+            })
+            {
+                if (!double.IsNaN(root))
+                    if (root < 0)
+                        possibleRoots.Add(0);
+                    else if (root > 1)
+                        possibleRoots.Add(1);
+                    else
+                        possibleRoots.Add(root);
+            }
+
+            var minRoot = -1.0;
+            var minValue = double.MaxValue;
+
+            foreach (var t in possibleRoots)
+            {
+                var local = Calculate(polynomial, t);
+                local.y = 0;
+                var distance = (local - pos).magnitude;
+
+                if (distance < minValue)
+                {
+                    minRoot = t;
+                    minValue = distance;
+                }
+            }
+
+            return new Tuple<double, double>(minRoot, minValue);
+
+        }
+        {
+            var root = -1 *
+                       (2 * polynomial[1, 0] * (polynomial[2, 0] - pos.x) +
+                        2 * polynomial[1, 1] * (polynomial[2, 1] - pos.y) +
+                        2 * polynomial[1, 2] * (polynomial[2, 2] - pos.z)) /
+                       (2 *
+                        (Math.Pow(polynomial[1, 0], 2) +
+                         Math.Pow(polynomial[1, 1], 2) +
+                         Math.Pow(polynomial[1, 2], 2)));
+            if (root < 0) root = 0;
+            if (root > 1) root = 1;
+
+            return new Tuple<double, double>(root, (Calculate(polynomial, root) - pos).magnitude);
+        }
+    }
 
     /// <summary>
     /// Returns a tuple (root, distanceToRoot)
@@ -205,7 +284,7 @@ public static class RoadUtilities {
             (arcLengthValues[0] * startRoot * startRoot * startRoot + arcLengthValues[1] * startRoot * startRoot + arcLengthValues[2] * startRoot);
     }
 
-    ///<summary> Returns a tuple (remaining distance, givenRoot)
+    ///<summary> Returns a tuple (remaining distance, givendRoot)
     ///</summary>
     public static Tuple<double, double> GetProjection(double[] arcLengthValues, double[] invarcLengthValues, double startRoot, double distance)
     {
@@ -221,11 +300,11 @@ public static class RoadUtilities {
                             arcLengthValues[2] * startRoot;
         //Debug.Log("start distance " + startDistance);
 
-        if (startDistance + distance < 0)
+        if (startDistance + distance <= 0)
             return new Tuple<double, double>(startDistance + distance, 0);
 
         var totalDistance = arcLengthValues[0] + arcLengthValues[1] + arcLengthValues[2];
-        if (startDistance + distance > totalDistance)
+        if (startDistance + distance >= totalDistance)
             return new Tuple<double, double>(startDistance + distance - totalDistance, 1);
 
         var finalDistance = startDistance + distance;
@@ -243,22 +322,30 @@ public static class RoadUtilities {
             return new Tuple<double, double>(double.NaN, double.NaN);
         }
 
-        var stRoot = distance < 0 ? Math.Max(startRoot, endRoot) : Math.Min(startRoot,endRoot);
-        var enRoot = distance < 0 ? Math.Min(startRoot, endRoot) : Math.Max(startRoot,endRoot);
+        if (distance < 0)
+        {
+            Debug.LogError("RoadUtilities.GetProjectionTo called with distance " + distance + " (must be positive)");
+            return new Tuple<double, double>(double.NaN, double.NaN);
+        }
 
+        var startDistance = arcLengthValues[0] * startRoot * startRoot * startRoot +
+                            arcLengthValues[1] * startRoot * startRoot +
+                            arcLengthValues[2] * startRoot;
 
-        var finalDistance = arcLengthValues[0] * stRoot * stRoot * stRoot +
-                            arcLengthValues[1] * stRoot * stRoot +
-                            arcLengthValues[2] * stRoot +
-                            distance;
-        var endDistance = arcLengthValues[0] * enRoot * enRoot * enRoot +
-                          arcLengthValues[1] * enRoot * enRoot +
-                          arcLengthValues[2] * enRoot;
+        var endDistance = arcLengthValues[0] * endRoot * endRoot * endRoot +
+                          arcLengthValues[1] * endRoot * endRoot +
+                          arcLengthValues[2] * endRoot;
 
-        if (finalDistance - endDistance > 0) return new Tuple<double, double>(finalDistance - endDistance, endRoot);
-        return new Tuple<double, double>(0, invarcLengthValues[0] * finalDistance * finalDistance * finalDistance +
-                                            invarcLengthValues[1] * finalDistance * finalDistance +
-                                            invarcLengthValues[2] * finalDistance);
+        if (startRoot >= endRoot && startDistance - distance <= endDistance)
+            return new Tuple<double, double>(Math.Abs(startDistance - distance), endRoot);
+        if(startRoot <= endRoot && startDistance + distance >= endDistance)
+            return new Tuple<double, double>(startDistance + distance - endDistance, endRoot);
+
+        var finalDistance = startRoot <= endRoot ? startDistance + distance : startDistance - distance;
+        return new Tuple<double, double>(0,
+                                         invarcLengthValues[0] * finalDistance * finalDistance * finalDistance +
+                                         invarcLengthValues[1] * finalDistance * finalDistance +
+                                         invarcLengthValues[2] * finalDistance);
     }
 }
 

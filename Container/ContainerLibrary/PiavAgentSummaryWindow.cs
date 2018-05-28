@@ -27,25 +27,38 @@ public class PiavAgentSummaryWindow : EditorWindow
             GUILayout.BeginHorizontal();
             GUILayout.Label("Name", GUILayout.Width(NameIndent));
             GUILayout.Label("Facing", GUILayout.Width(V3Indent));
-            GUILayout.Label("Moving", GUILayout.Width(V3Indent));
             GUILayout.Label("AS", GUILayout.Width(DigitIndent));
-            GUILayout.Label("DS", GUILayout.Width(DigitIndent));
             GUILayout.Label("Segment", GUILayout.Width(NameIndent));
             GUILayout.Label("Root", GUILayout.Width(DigitIndent));
+            GUILayout.Label("Distance", GUILayout.Width(DigitIndent));
+            GUILayout.Label("Heuristic", GUILayout.Width(DigitIndent));
             GUILayout.EndHorizontal();
 
             foreach (var car in _rc._cars)
             {
                 GUILayout.BeginHorizontal();
                 GUILayout.Label(car.name, GUILayout.Width(NameIndent));
-                GUILayout.Label(car.CurrentFacingDirection.HasValue? car.CurrentFacingDirection.ToString():"X", GUILayout.Width(V3Indent));
-                GUILayout.Label(car.CurrentMovingDirection.HasValue? car.CurrentMovingDirection.ToString():"X", GUILayout.Width(V3Indent));
+                GUILayout.Label(car.CurrentFacingDirection.ToString(), GUILayout.Width(V3Indent));
                 GUILayout.Label(!double.IsNaN(car.CurrentAbsoluteSpeed)? car.CurrentAbsoluteSpeed.ToString("n2",CultureInfo.InvariantCulture):"X", GUILayout.Width(DigitIndent));
-                GUILayout.Label(!double.IsNaN(car.CurrentDirectionalSpeed)? car.CurrentDirectionalSpeed.ToString("n2",CultureInfo.InvariantCulture):"X", GUILayout.Width(DigitIndent));
-                GUILayout.Label(car.CurrentSegment?.Id.ToString() ?? "X", GUILayout.Width(NameIndent));
-                GUILayout.Label(!double.IsNaN(car.CurrentRoot)? car.CurrentRoot.ToString("n2",CultureInfo.InvariantCulture):"X", GUILayout.Width(DigitIndent));
+                GUILayout.Label(car.CurrentSegments.Count != 0 ? car.CurrentSegments[0].Item1.Id.ToString() : "X", GUILayout.Width(NameIndent));
+                GUILayout.Label(car.CurrentSegments.Count != 0 ? car.CurrentSegments[0].Item2.ToString("n2",CultureInfo.InvariantCulture) : "X", GUILayout.Width(DigitIndent));
+                GUILayout.Label(car.CurrentSegments.Count != 0 ? car.CurrentSegments[0].Item3.ToString("n2", CultureInfo.InvariantCulture) : "X", GUILayout.Width(DigitIndent));
+                GUILayout.Label(car.CurrentSegments.Count != 0 ? car.CurrentSegments[0].Item4.ToString("n2", CultureInfo.InvariantCulture) : "X", GUILayout.Width(DigitIndent));
                 GUILayout.EndHorizontal();
+
+                if (car.CurrentSegments.Count > 1)
+                    for (int i = 1; i < car.CurrentSegments.Count; i++)
+                    {
+                        GUILayout.BeginHorizontal();
+                        GUILayout.Label("", GUILayout.Width(NameIndent + V3Indent + DigitIndent));
+                        GUILayout.Label(car.CurrentSegments[i].Item1.Id.ToString(), GUILayout.Width(NameIndent));
+                        GUILayout.Label(car.CurrentSegments[i].Item2.ToString("n2", CultureInfo.InvariantCulture), GUILayout.Width(DigitIndent));
+                        GUILayout.Label(car.CurrentSegments[i].Item3.ToString("n2", CultureInfo.InvariantCulture), GUILayout.Width(DigitIndent));
+                        GUILayout.Label(car.CurrentSegments[i].Item4.ToString("n2", CultureInfo.InvariantCulture), GUILayout.Width(DigitIndent));
+                        GUILayout.EndHorizontal();
+                    }
             }
+
         }
 
         Repaint();
