@@ -9,8 +9,10 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>PiavContainerLibrary</RootNamespace>
     <AssemblyName>PiavContainerLibrary</AssemblyName>
-    <TargetFrameworkVersion>v4.6.1</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
+    <TargetFrameworkProfile>
+    </TargetFrameworkProfile>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -20,6 +22,7 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -28,20 +31,15 @@
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System" />
     <Reference Include="System.Core" />
-    <Reference Include="Microsoft.CSharp" />
-    <Reference Include="System.Data" />
     <Reference Include="System.Xml" />
-    <Reference Include="UnityEditor, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\..\..\..\..\Program Files\Unity\Editor\Data\Managed\UnityEditor.dll</HintPath>
-    </Reference>
     <Reference Include="UnityEngine, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\..\..\..\..\Program Files\Unity\Editor\Data\Managed\UnityEngine.dll</HintPath>
+      <HintPath>C:\Program Files\Unity\Editor\Data\Managed\UnityEngine.dll</HintPath>
     </Reference>
   </ItemGroup>
   <ItemGroup>
@@ -51,13 +49,13 @@
     <Compile Include="Behaviors\BehaviorFollowPath.cs" />
     <Compile Include="Behaviors\BehaviorLaneFollow.cs" />
     <Compile Include="Behaviors\BehaviorMaintainSpeed.cs" />
+    <Compile Include="Behaviors\BehaviorReduceSpeedOnSharpTurn.cs" />
     <Compile Include="Behaviors\BehaviorRespectRoadSpeedLimit.cs" />
     <Compile Include="Behaviors\BehaviorSetPathTarget.cs" />
     <Compile Include="Behaviors\BehaviorSpeedManagement.cs" />
     <Compile Include="Behaviors\PiavCoreAiInput.cs" />
     <Compile Include="Behaviors\PiavInput.cs" />
     <Compile Include="Behaviors\PiavManualInput.cs" />
-    <Compile Include="PiavAgentSummaryWindow.cs" />
     <Compile Include="LaneContact.cs" />
     <Compile Include="ParkingSpace.cs" />
     <Compile Include="PointContact.cs" />
@@ -75,4 +73,8 @@
     <WCFMetadata Include="Connected Services\" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <PropertyGroup>
+    <PostBuildEvent>
+    </PostBuildEvent>
+  </PropertyGroup>
 </Project>

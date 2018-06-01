@@ -60,12 +60,11 @@ public class PiavRoadContainer : MonoBehaviour
         {
             car.CurrentPosition        = car.transform.position;
             car.CurrentFacingDirection = car.transform.forward;
-
             car.CurrentAbsoluteSpeed   = 0;
-
             var closestSegments                                 = FindAllSegmentsWithinLaneWidth(car.CurrentPosition, LaneType.Vehicle, car.CurrentFacingDirection);
             if (closestSegments.Count != 0) car.CurrentSegments = closestSegments;
             else car.CurrentSegments.Clear();
+
         }
     }
 
@@ -982,10 +981,10 @@ public class PiavRoadContainer : MonoBehaviour
                 {
                     var possibleRoot = RoadUtilities.GetClosestRootWithoutYComponent(segment.Polynomial, pos);
 
-                    if (possibleRoot.Item2 < segment.ParentLane.Width / 2)
+                    if (possibleRoot.Item2 < segment.ParentLane.Width)
                     {
                         var dot = Vector3.Dot(RoadUtilities.CalculateFirstDerivative(segment.Polynomial, possibleRoot.Item1).normalized, direction.normalized);
-                        res.Add(new Tuple<Segment, double, double,double>(segment,possibleRoot.Item1, possibleRoot.Item2,dot/(possibleRoot.Item2 + 1)));
+                        res.Add(new Tuple<Segment, double, double,double>(segment,possibleRoot.Item1, possibleRoot.Item2,dot/(possibleRoot.Item2 + 1)*(segment.ParentLane.Direction?-1:1)));
                     }
                 }
             }

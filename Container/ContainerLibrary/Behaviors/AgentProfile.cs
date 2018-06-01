@@ -36,6 +36,7 @@ internal class AgentProfile
     internal bool _needTargetDestination;
     internal Tuple<Segment,double> _targetDestination;
 
+
     /*
     internal bool _isParked;
     internal bool _makeHeadLightSignal;

@@ -11,10 +11,10 @@ public class PiavCoreAiInput : PiavInput {
             new BehaviorLaneFollow(this),
             new BehaviorMaintainSpeed(this),
             new BehaviorRespectRoadSpeedLimit(this),
-            //new BehaviorReduceSpeedOnSharpTurn(this),
-            new BehaviorFindPath(this),
-            new BehaviorFollowPath(this),
-            new BehaviorSetPathTarget(this)
+            new BehaviorReduceSpeedOnSharpTurn(this)
+            //new BehaviorFindPath(this),
+            //new BehaviorFollowPath(this),
+            //new BehaviorSetPathTarget(this)
         };
     }
 
@@ -75,6 +75,12 @@ public class PiavCoreAiInput : PiavInput {
                 }
             }
 
+            if (next == null)
+                foreach (var contact in currentEvaluatedSegment.Contacts)
+                {
+                    next = contact.Target;
+                    break;
+                }
 
             if (next != null)
             {

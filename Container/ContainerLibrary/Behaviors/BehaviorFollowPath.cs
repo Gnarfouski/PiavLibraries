@@ -7,14 +7,18 @@ internal class BehaviorFollowPath : AiBehavior
 
     internal override void Update(PiavRoadAgent agent)
     {
-        if (agent.DesiredIncomingPath.Count >= 1)
+        if (agent.DesiredIncomingPath.Count > 1)
         {
-            foreach (var possibleSegment in agent.CurrentSegments)
+            for (int i = 1; i < agent.DesiredIncomingPath.Count; i++)
             {
-                if (possibleSegment.Item1.Id == agent.DesiredIncomingPath[0].Item1.Id &&
-                    (possibleSegment.Item1.ParentLane.Direction && possibleSegment.Item2 <= agent.DesiredIncomingPath[0].Item2 ||
-                        !possibleSegment.Item1.ParentLane.Direction && possibleSegment.Item2 >= agent.DesiredIncomingPath[0].Item3))
-                        agent.DesiredIncomingPath.RemoveAt(0);
+                foreach (var possibleSegment in agent.CurrentSegments)
+                {
+                    if (possibleSegment.Item1.Id == agent.DesiredIncomingPath[i].Item1.Id && possibleSegment.Item2 > 0 && possibleSegment.Item2 < 1)
+                    {
+                        agent.DesiredIncomingPath.RemoveRange(0,i);
+                        break;
+                    }
+                }
             }
 
             var gizmolist = new List<Vector3>();

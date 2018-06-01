@@ -4,11 +4,24 @@ using UnityEngine;
 [ExecuteInEditMode]
 internal class PiavRoadInterface : MonoBehaviour
 {
-    /// <summary>The Road Interface stores data for both the generation of the 3D mesh used in the scene, and the XML guidance file used by the agents. It allows you to :
-    /// - place the 3D points guiding the road
-    /// - choose the granularity of the 3D mesh
-    /// - lock roads together with road contacts to form a navigable network for agents
-    /// </summary>
+    private void Awake()
+    {
+        var roadConfig = FindObjectOfType(typeof(PiavRoadConfig)) as PiavRoadConfig;
+
+        if (null != roadConfig)
+            if (null != roadConfig._roadTemplates && roadConfig._roadTemplates.Length > 0)
+            {
+                _savedTemplateIndex = 0;
+                LoadRoadMesh();
+                RegenerateMesh();
+            }
+        else
+            {
+                Debug.LogError("No Road template found in RoadConfig");
+            }
+        else
+            Debug.LogError("RoadConfig not found in scene");
+    }
 
     /// <summary> Keep the Gameobject transform at zero to not have to transform local points to global
     /// </summary>
@@ -48,12 +61,12 @@ internal class PiavRoadInterface : MonoBehaviour
     /// </summary>
     private void RegenerateDividers()
     {
-        _dividerPolynoms = new QuadraticPolynomial[_laneWidths.Length + 1, AnchorPoints.Length - 1];
-        var centralPPolynom = PathCentralPPolynom(AnchorPoints);
+        _dividerPolynoms = new QuadraticPolynomial[_laneWidths.Length + 1, _anchorPoints.Length - 1];
+        var centralPPolynom = PathCentralPPolynom(_anchorPoints);
 
         // Compute Cross Vectors
 
-        var centralCrossValues = new Vector3[AnchorPoints.Length];
+        var centralCrossValues = new Vector3[_anchorPoints.Length];
         centralCrossValues[0] = Vector3.Cross(centralPPolynom[0].CalculateFirstDerivative(0), Vector3.up);
         centralCrossValues[0].y = 0;
         centralCrossValues[0].Normalize();
@@ -77,20 +90,20 @@ internal class PiavRoadInterface : MonoBehaviour
 
         // Compute Divider-wise Points
 
-        var dividerPoints = new Vector3[_laneWidths.Length + 1, AnchorPoints.Length];
+        var dividerPoints = new Vector3[_laneWidths.Length + 1, _anchorPoints.Length];
 
         for (var i = 0; i <= _laneWidths.Length; i++)
         {
-            for (var j = 0; j < AnchorPoints.Length; j++) dividerPoints[i, j] = AnchorPoints[j] + centralCrossValues[j] * (float)dividerDistances[i];
+            for (var j = 0; j < _anchorPoints.Length; j++) dividerPoints[i, j] = _anchorPoints[j] + centralCrossValues[j] * (float)dividerDistances[i];
         }
 
         // Compute Divider polynoms - We cannot path the divider polys the same way we did with the central one (see online docs). We use relative point distance to scale the central polynoms
 
         for (var i = 0; i <= _laneWidths.Length; i++)
         {
-            for (var j = 0; j < AnchorPoints.Length - 1; j++)
+            for (var j = 0; j < _anchorPoints.Length - 1; j++)
             {
-                var dist = AnchorPoints[j + 1] - AnchorPoints[j];
+                var dist = _anchorPoints[j + 1] - _anchorPoints[j];
                 var ddist = dividerPoints[i, j + 1] - dividerPoints[i, j];
 
                 var ponderation = new Vector3
@@ -314,7 +327,9 @@ internal class PiavRoadInterface : MonoBehaviour
 
     #region Variables
 
-    [SerializeField] internal Vector3[] AnchorPoints = { Vector3.zero, Vector3.forward * 5f };
+    public int RoadConfigIndex = 0;
+
+    [SerializeField] internal Vector3[] _anchorPoints = { Vector3.zero, Vector3.forward * 5f };
     [SerializeField] internal RoadContact[] _roadContacts;
 
     internal int _speedLimit;

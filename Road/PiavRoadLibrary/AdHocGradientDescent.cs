@@ -1,6 +1,5 @@
 ﻿using System;
 using UnityEngine;
-using ViliPetek.LinearAlgebra;
 
 internal static class AdHocGradientDescent
 {

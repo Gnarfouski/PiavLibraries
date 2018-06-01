@@ -5,36 +5,33 @@ using System.Runtime.CompilerServices;
 /// <summary>
 /// Class implementing LU decomposition
 /// </summary>
-public class LUDecomposition
+internal class LuDecomposition
 {
     public double[,] L { private set; get; }
     public double[,] U { private set; get; }
 
-    private int[]    permutation;
-    private double[] rowBuffer;
+    private int[]    _permutation;
+    private double[] _rowBuffer;
 
     /// <summary>
     /// An implementation of LU decomposition.
     /// </summary>
     /// <param name="matrix">A square decomposable matrix</param>
-    public LUDecomposition(double[,] matrix)
+    public LuDecomposition(double[,] matrix)
     {
         int rows = matrix.Rows();
         int cols = matrix.Cols();
 
-        if (rows != cols)
-        {
-            throw new ArgumentException("Matrix is not square");
-        }
+        if (rows != cols) throw new ArgumentException("Matrix is not square");
 
         // generate LU matrices
         L = Matrix.Identity(cols);
         U = (double[,])matrix.Clone();
 
         // used for quick swapping rows
-        rowBuffer = new double[cols];
+        _rowBuffer = new double[cols];
 
-        permutation = Enumerable.Range(0, rows).ToArray();
+        _permutation = Enumerable.Range(0, rows).ToArray();
 
         double singular = 0;
         int    pivotRow = 0;
@@ -58,7 +55,7 @@ public class LUDecomposition
                 new ArgumentException("Matrix is singlar");
             }
 
-            Swap(ref permutation[k], ref permutation[pivotRow]);
+            Swap(ref _permutation[k], ref _permutation[pivotRow]);
 
             for (int i = 0; i < k; i++)
             {
@@ -94,7 +91,7 @@ public class LUDecomposition
         {
             for (int j = 0; j < matrix.Rows(); j++)
             {
-                vec[j] = matrix[permutation[j], col];
+                vec[j] = matrix[_permutation[j], col];
             }
             var forwardSub = ForwardSub(L, vec);
             var backSub    = BackSub(U, forwardSub);
@@ -120,7 +117,7 @@ public class LUDecomposition
 
         for (int i = 0; i < vector.Length; i++)
         {
-            vec[i] = vector[permutation[i]];
+            vec[i] = vector[_permutation[i]];
         }
 
         double[] z = ForwardSub(L, vec);
@@ -171,9 +168,9 @@ public class LUDecomposition
     private void SwapRows(double[,] matrix, int rowA, int rowB)
     {
         int rowSize = 8 * matrix.Cols();
-        Buffer.BlockCopy(matrix, rowB * rowSize, rowBuffer, 0, rowSize);
+        Buffer.BlockCopy(matrix, rowB * rowSize, _rowBuffer, 0, rowSize);
         Buffer.BlockCopy(matrix, rowA * rowSize, matrix, rowB * rowSize, rowSize);
-        Buffer.BlockCopy(rowBuffer, 0, matrix, rowA * rowSize, rowSize);
+        Buffer.BlockCopy(_rowBuffer, 0, matrix, rowA * rowSize, rowSize);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

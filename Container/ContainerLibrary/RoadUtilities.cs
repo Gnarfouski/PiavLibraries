@@ -70,16 +70,17 @@ internal static class RoadUtilities {
         {
             var root = -1 *
                        (2 * polynomial[1, 0] * (polynomial[2, 0] - pos.x) +
-                        2 * polynomial[1, 1] * (polynomial[2, 1] - pos.y) +
                         2 * polynomial[1, 2] * (polynomial[2, 2] - pos.z)) /
                        (2 *
                         (Math.Pow(polynomial[1, 0], 2) +
-                         Math.Pow(polynomial[1, 1], 2) +
                          Math.Pow(polynomial[1, 2], 2)));
             if (root < 0) root = 0;
             if (root > 1) root = 1;
 
-            return new Tuple<double, double>(root, (Calculate(polynomial, root) - pos).magnitude);
+            var posR = Calculate(polynomial, root);
+            posR.y = pos.y;
+
+            return new Tuple<double, double>(root,(posR - pos).magnitude);
         }
     }
 
@@ -301,7 +302,7 @@ internal static class RoadUtilities {
         //Debug.Log("start distance " + startDistance);
 
         if (startDistance + distance <= 0)
-            return new Tuple<double, double>(startDistance + distance, 0);
+            return new Tuple<double, double>(Math.Abs(startDistance) + distance, 0);
 
         var totalDistance = arcLengthValues[0] + arcLengthValues[1] + arcLengthValues[2];
         if (startDistance + distance >= totalDistance)

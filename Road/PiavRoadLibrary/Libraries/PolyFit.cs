@@ -46,7 +46,7 @@ internal class PolyFit
         var matrixXtX = matrixXt.Product(matrixX);
         var matrixXtY = matrixXt.Product(matrixY);
 
-        var lu = new LUDecomposition(matrixXtX);
+        var lu = new LuDecomposition(matrixXtX);
         Coeff  = lu.Solve(matrixXtY).GetColumn(0).ToArray();
     }
 

@@ -5,11 +5,14 @@ using UnityEngine.SceneManagement;
 
 internal class PiavFullRoadXmlRegeneration : MonoBehaviour
 {
-    /// <summary>This class is used to generate the navigation XML file for agents to use. It writes :
-    /// lane ppolynoms with arc length approximations and individual IDs
-    /// stopping points such as stop signs and traffic lights
-    /// parking spaces
-    /// </summary>
+    private void Update()
+    {
+        if (DoRegenerate)
+        {
+            DoRegenerate = false;
+            Regenerate();
+        }
+    }
 
     internal void Regenerate()
     {
@@ -64,4 +67,6 @@ internal class PiavFullRoadXmlRegeneration : MonoBehaviour
 
         return xmlDoc;
     }
+
+    public bool DoRegenerate = false;
 }
