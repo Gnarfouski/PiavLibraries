@@ -22,16 +22,16 @@ internal class PolyFit
     internal PolyFit(double[] x, double[] y, int order)
     {
         // incrememnt the order to match matlab way
-        var matrixX = new double[x.Count(), ++order];
-        var matrixY = new double[x.Count(), 1];
+        var matrixX = new double[x.Length, ++order];
+        var matrixY = new double[x.Length, 1];
 
         if (x.Length != y.Length) throw new ArgumentException("x and y array lengths do not match!");
 
         // copy y matrix
-        for (int i = 0; i < y.Count(); i++) matrixY[i, 0] = y[i];
+        for (int i = 0; i < y.Length; i++) matrixY[i, 0] = y[i];
 
         // create the X matrix
-        for (int row = 0; row < x.Count(); row++)
+        for (int row = 0; row < x.Length; row++)
         {
             var nVal = 1.0;
 

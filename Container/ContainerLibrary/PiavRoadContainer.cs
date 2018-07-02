@@ -19,9 +19,9 @@ public class PiavRoadContainer : MonoBehaviour
 
         var xmlDoc = new XmlDocument();
 
-        if (File.Exists(Application.dataPath + "/" + SceneManager.GetActiveScene().name + "Info.xml"))
+        if (File.Exists(Application.dataPath + "/StreamingAssets/" + SceneManager.GetActiveScene().name + "Info.xml"))
         {
-            xmlDoc.Load(Application.dataPath + "/" + SceneManager.GetActiveScene().name + "Info.xml");
+            xmlDoc.Load(Application.dataPath + "/StreamingAssets/" + SceneManager.GetActiveScene().name + "Info.xml");
 
             foreach (XmlNode n in xmlDoc.FirstChild.ChildNodes)
             {
@@ -65,11 +65,21 @@ public class PiavRoadContainer : MonoBehaviour
             if (closestSegments.Count != 0) car.CurrentSegments = closestSegments;
             else car.CurrentSegments.Clear();
 
+            //car.CurrentStops = FindAllStops(car, car.CurrentAbsoluteSpeed * 3,true);
         }
     }
 
     private void Update()
     {
+            for (int i = 0; i < _cars.Count; i++)
+            {
+                if (_cars[i] == null)
+                {
+                    _cars.RemoveAt(i);
+                    i--;
+                }
+            }
+
         foreach (var car in _cars)
         {
             var positionDelta          = car.transform.position - car.CurrentPosition;
@@ -79,9 +89,347 @@ public class PiavRoadContainer : MonoBehaviour
             car.CurrentFacingDirection = car.transform.forward;
 
             var closestSegments = FindAllSegmentsWithinLaneWidth(car.CurrentPosition, LaneType.Vehicle, car.CurrentFacingDirection);
-                if (closestSegments.Count != 0) car.CurrentSegments = closestSegments;
-                else car.CurrentSegments.Clear();
+            if (closestSegments.Count != 0) car.CurrentSegments = closestSegments;
+            else car.CurrentSegments.Clear();
+
+            //car.CurrentStops = FindAllStops(car, car.CurrentAbsoluteSpeed * 3, true);
         }
+    }
+
+    private void LateUpdate()
+    {
+        foreach (var sg in _segments)
+        {
+            for(int i = 0; i < sg.Stops.Count; i++)
+            {
+                if (sg.Stops[i].Type == StoppingType.Vehicle)
+                {
+                    sg.Stops.RemoveAt(i);
+                    i--;
+                }
+            }
+        }
+
+        foreach (var car in _cars)
+        {
+            foreach (var cs in car.CurrentSegments)
+            {
+                cs._segment.Stops.Add(new StoppingPoint
+                {
+                    Type = StoppingType.Vehicle,
+                    Origin = car,
+                    ParentSegment = cs._segment,
+                    Root = cs._root,
+                    Sm = new StopSignSm()
+                });
+            }
+        }
+    }
+
+    [Serializable]
+    internal struct StoppingDataPackage
+    {
+        internal StoppingPoint[] _points;
+        internal double[] _distances;
+    }
+
+    [Serializable]
+    internal struct Projection
+    {
+        internal double _remainingDistance;
+        internal Segment _targetSegment;
+        internal double _targetRoot;
+    }
+
+    private StoppingDataPackage FindAllStops(PiavRoadAgent parentAgent, double distance, bool withTraffic)
+    {
+        if (distance < 0) throw new Exception("Project with positive distances only");
+
+        var resList = new StoppingDataPackage();
+        var pathList = new StoppingDataPackage();
+        var laneList = new StoppingDataPackage();
+
+        var mas        = parentAgent.CurrentSegments[0];
+        var projection = new Projection{ _remainingDistance = distance,  _targetSegment = mas._segment, _targetRoot = mas._root};
+
+        if (parentAgent._desiredIncomingPath != null && parentAgent._desiredIncomingPath.Count > 0)
+            foreach (var possibleSegment in parentAgent.CurrentSegments)
+            {
+                if (possibleSegment._segment.Id == parentAgent._desiredIncomingPath[0]._parentSegment.Id)
+                {
+                    pathList = GetStopsOnPath(parentAgent, distance, withTraffic, possibleSegment._root, out projection);
+                    break;
+                }
+            }
+
+        if (projection._remainingDistance > 0.1) laneList = GetStopsOnLane(projection._remainingDistance, withTraffic, projection._targetSegment, projection._targetRoot, out projection);
+
+        var pathCount = pathList._points.Length;
+        var laneCount = pathList._points.Length;
+        var totalCount = pathCount + laneCount;
+
+        resList._points = new StoppingPoint[totalCount];
+        resList._distances = new double[totalCount];
+
+        for (int i = 0; i < pathCount; i++)
+        {
+            resList._points[i] = pathList._points[i];
+            resList._distances[i] = pathList._distances[i];
+        }
+
+        for (int i = pathCount; i < totalCount; i++)
+        {
+            resList._points[i]    = laneList._points[i - pathCount];
+            resList._distances[i] = laneList._distances[i - pathCount];
+        }
+
+        return resList;
+    }
+
+    [Serializable]
+    internal struct SpeedLimitation
+    {
+        internal double _value;
+        internal Type   _originBehaviorType;
+    }
+
+    internal Projection ProjectPathLaneFromOrigin(PiavRoadAgent parentAgent, double distance, bool withTraffic)
+    {
+        if (distance < 0) throw new Exception("Project with positive distances only");
+
+        var mas = parentAgent.CurrentSegments[0];
+        var projection = new Projection{_remainingDistance = distance, _targetSegment = mas._segment, _targetRoot = mas._root};
+
+        if (parentAgent._desiredIncomingPath != null && parentAgent._desiredIncomingPath.Count > 0)
+            foreach (var possibleSegment in parentAgent.CurrentSegments)
+            {
+                if (possibleSegment._segment.Id == parentAgent._desiredIncomingPath[0]._parentSegment.Id)
+                {
+                    projection = ProjectOnPath(parentAgent, distance, withTraffic, possibleSegment._root);
+                    break;
+                }
+            }
+
+        if (projection._remainingDistance > 0.1) projection = ProjectOnLane(projection._remainingDistance, withTraffic, projection._targetSegment, projection._targetRoot);
+        return projection;
+    }
+
+    private StoppingDataPackage GetStopsOnLane(double distance, bool withTraffic, Segment startSegment, double startRoot, out Projection endProjection)
+    {
+        if (distance < 0) throw new Exception("ProjectOnLane called with negative distance");
+
+        var resList = new StoppingDataPackage();
+
+        var currentRoot = startRoot;
+        var lastProjection = new Projection{ _remainingDistance = distance * (startSegment.ParentLane.Direction && !withTraffic || !startSegment.ParentLane.Direction && withTraffic ? 1 : -1), _targetSegment = startSegment, _targetRoot = currentRoot};
+        var limitCount = 100;
+
+        var sps = new List<StoppingPoint>();
+        var dist = new List<double>();
+
+        while (limitCount > 0)
+        {
+            lastProjection = RoadUtilities.GetProjection(lastProjection._targetSegment, currentRoot, lastProjection._remainingDistance);
+
+            resList._points = new StoppingPoint[lastProjection._targetSegment.Stops.Count];
+            resList._distances = new double[lastProjection._targetSegment.Stops.Count];
+
+            foreach (var t in lastProjection._targetSegment.Stops)
+            {
+                if (t.Root >= Math.Min(currentRoot, lastProjection._targetRoot) && t.Root <= Math.Max(currentRoot, lastProjection._targetRoot))
+                {
+                    var tempProjection = RoadUtilities.GetProjectionTo(
+                                                                       lastProjection._targetSegment.ArcLength, lastProjection._targetSegment.InvArcLength, lastProjection._targetSegment, currentRoot, t.Root, lastProjection._remainingDistance);
+                    sps.Add(t);
+                    dist.Add(distance - tempProjection._remainingDistance);
+                }
+            }
+
+            if (Math.Abs(lastProjection._remainingDistance) <= 0.001)
+            {
+                endProjection = new Projection{_remainingDistance = lastProjection._remainingDistance, _targetSegment = lastProjection._targetSegment, _targetRoot = lastProjection._targetRoot};
+                resList._points = sps.ToArray();
+                resList._distances = dist.ToArray();
+                return resList;
+            }
+
+            Segment next = null;
+
+            foreach (var contact in lastProjection._targetSegment.Contacts)
+            {
+                if (contact.Target.ParentLane.Id == lastProjection._targetSegment.ParentLane.Id)
+                {
+                    next = contact.Target;
+
+                    break;
+                }
+            }
+
+            if (next == null)
+                foreach (var contact in lastProjection._targetSegment.Contacts)
+                {
+                    next = contact.Target;
+                    break;
+                }
+
+            if (next != null)
+            {
+                lastProjection._targetSegment = next;
+                currentRoot = lastProjection._targetSegment.ParentLane.Direction ? 1 : 0;
+            }
+            else
+            {
+                endProjection = new Projection{_remainingDistance = lastProjection._remainingDistance, _targetSegment = lastProjection._targetSegment, _targetRoot = lastProjection._targetRoot};
+                resList._points    = sps.ToArray();
+                resList._distances = dist.ToArray();
+                return resList;
+            }
+            limitCount--;
+        }
+
+        endProjection = new Projection {_remainingDistance = lastProjection._remainingDistance, _targetSegment = lastProjection._targetSegment, _targetRoot = lastProjection._targetRoot };
+        resList._points    = sps.ToArray();
+        resList._distances = dist.ToArray();
+        return resList;
+    }
+
+    private Projection ProjectOnLane(double distance, bool withTraffic, Segment startSegment, double startRoot)
+    {
+        if (distance < 0) throw new Exception("ProjectOnLane called with negative distance");
+
+        var currentRoot = startRoot;
+        var lastProjection = new Projection
+            {_remainingDistance = distance * (startSegment.ParentLane.Direction && !withTraffic || !startSegment.ParentLane.Direction && withTraffic ? 1 : -1), _targetSegment = startSegment, _targetRoot = currentRoot};
+        var limitCount = 100;
+
+        while (limitCount > 0)
+        {
+            lastProjection = RoadUtilities.GetProjection(lastProjection._targetSegment, currentRoot, lastProjection._remainingDistance);
+
+
+            if (Math.Abs(lastProjection._remainingDistance) <= 0.001) return lastProjection;
+
+            Segment next = null;
+
+            foreach (var contact in lastProjection._targetSegment.Contacts)
+            {
+                if (contact.Target.ParentLane.Id == lastProjection._targetSegment.ParentLane.Id)
+                {
+                    next = contact.Target;
+
+                    break;
+                }
+            }
+
+            if (next == null)
+                foreach (var contact in lastProjection._targetSegment.Contacts)
+                {
+                    next = contact.Target;
+                    break;
+                }
+
+            if (next != null)
+            {
+                lastProjection._targetSegment = next;
+                currentRoot = lastProjection._targetSegment.ParentLane.Direction ? 1 : 0;
+            }
+            else
+            {
+                return lastProjection;
+            }
+            limitCount--;
+        }
+
+        return lastProjection;
+    }
+
+    private StoppingDataPackage GetStopsOnPath(PiavRoadAgent parentAgent, double distance, bool withTraffic, double startRoot, out Projection endProjection)
+    {
+        var resList = new StoppingDataPackage();
+
+        var currentRoot = startRoot;
+        var endRoot = parentAgent._desiredIncomingPath[0]._parentSegment.ParentLane.Direction && withTraffic || !parentAgent._desiredIncomingPath[0]._parentSegment.ParentLane.Direction && !withTraffic ?
+                          parentAgent._desiredIncomingPath[0]._fromRoot : parentAgent._desiredIncomingPath[0]._toRoot;
+
+        var lastProjection = new Projection{_remainingDistance = distance, _targetSegment = parentAgent._desiredIncomingPath[0]._parentSegment, _targetRoot = currentRoot};
+
+        var sps = new List<StoppingPoint>();
+        var dist = new List<double>();
+
+        for (int i = 0; i < parentAgent._desiredIncomingPath.Count; i++)
+        {
+            foreach (var t in lastProjection._targetSegment.Stops)
+            {
+                if (t.Root >= Math.Min(currentRoot,endRoot) && t.Root <= Math.Max(currentRoot,endRoot))
+                {
+                    var tempProjection = RoadUtilities.GetProjectionTo(lastProjection._targetSegment.ArcLength, lastProjection._targetSegment.InvArcLength,lastProjection._targetSegment, currentRoot, t.Root, lastProjection._remainingDistance);
+
+                    sps.Add(t);
+                    dist.Add(distance - tempProjection._remainingDistance);
+                }
+            }
+            lastProjection = RoadUtilities.GetProjectionTo(lastProjection._targetSegment.ArcLength, lastProjection._targetSegment.InvArcLength, lastProjection._targetSegment, currentRoot, endRoot, lastProjection._remainingDistance);
+
+            if (Math.Abs(lastProjection._remainingDistance) <= 0.001 || i == parentAgent._desiredIncomingPath.Count - 1)
+            {
+                endProjection = new Projection{_remainingDistance = lastProjection._remainingDistance, _targetSegment = lastProjection._targetSegment, _targetRoot = lastProjection._targetRoot};
+                resList._points = sps.ToArray();
+                resList._distances = dist.ToArray();
+                return resList;
+            }
+
+            lastProjection._targetSegment = parentAgent._desiredIncomingPath[i+1]._parentSegment;
+
+            if (parentAgent._desiredIncomingPath[i+1]._parentSegment.ParentLane.Direction)
+            {
+                currentRoot = withTraffic ? parentAgent._desiredIncomingPath[i+1]._toRoot : parentAgent._desiredIncomingPath[i+1]._fromRoot;
+                endRoot = withTraffic ? parentAgent._desiredIncomingPath[i+1]._fromRoot : parentAgent._desiredIncomingPath[i+1]._toRoot;
+            }
+            else
+            {
+                currentRoot = withTraffic ? parentAgent._desiredIncomingPath[i+1]._fromRoot : parentAgent._desiredIncomingPath[i+1]._toRoot;
+                endRoot = withTraffic ? parentAgent._desiredIncomingPath[i+1]._toRoot : parentAgent._desiredIncomingPath[i+1]._fromRoot;
+            }
+        }
+
+        endProjection = lastProjection;
+        resList._points    = sps.ToArray();
+        resList._distances = dist.ToArray();
+        return resList;
+    }
+
+    private Projection ProjectOnPath(PiavRoadAgent parentAgent, double distance, bool withTraffic, double startRoot)
+    {
+
+        var currentRoot = startRoot;
+        var endRoot = parentAgent._desiredIncomingPath[0]._parentSegment.ParentLane.Direction && withTraffic || !parentAgent._desiredIncomingPath[0]._parentSegment.ParentLane.Direction && !withTraffic ?
+                          parentAgent._desiredIncomingPath[0]._fromRoot : parentAgent._desiredIncomingPath[0]._toRoot;
+
+        var lastProjection = new Projection{_remainingDistance = distance, _targetSegment = parentAgent._desiredIncomingPath[0]._parentSegment,_targetRoot = currentRoot};
+
+        for (int i = 0; i < parentAgent._desiredIncomingPath.Count; i++)
+        {
+
+            lastProjection = RoadUtilities.GetProjectionTo(lastProjection._targetSegment.ArcLength, lastProjection._targetSegment.InvArcLength, lastProjection._targetSegment, currentRoot, endRoot, lastProjection._remainingDistance);
+
+            if (Math.Abs(lastProjection._remainingDistance) <= 0.001 || i == parentAgent._desiredIncomingPath.Count - 1)
+                return lastProjection;
+
+            lastProjection._targetSegment = parentAgent._desiredIncomingPath[i+1]._parentSegment;
+
+            if (parentAgent._desiredIncomingPath[i+1]._parentSegment.ParentLane.Direction)
+            {
+                currentRoot = withTraffic ? parentAgent._desiredIncomingPath[i+1]._toRoot : parentAgent._desiredIncomingPath[i+1]._fromRoot;
+                endRoot = withTraffic ? parentAgent._desiredIncomingPath[i+1]._fromRoot : parentAgent._desiredIncomingPath[i+1]._toRoot;
+            }
+            else
+            {
+                currentRoot = withTraffic ? parentAgent._desiredIncomingPath[i+1]._fromRoot : parentAgent._desiredIncomingPath[i+1]._toRoot;
+                endRoot = withTraffic ? parentAgent._desiredIncomingPath[i+1]._toRoot : parentAgent._desiredIncomingPath[i+1]._fromRoot;
+            }
+        }
+
+        return lastProjection;
     }
 
     private void BuildDualGraph()
@@ -158,43 +506,43 @@ public class PiavRoadContainer : MonoBehaviour
         }
         foreach (var collection in tempDualGraph)
         {
-            foreach (var dv in collection) dv.Distance = RoadUtilities.GetArcLengthBetween(dv.ParentSegmentPart.Item1.ArcLength, dv.ParentSegmentPart.Item2, dv.ParentSegmentPart.Item3);
-            DualGraph.AddRange(collection);
+            foreach (var dv in collection) dv.Distance = RoadUtilities.GetArcLengthBetween(dv._parentSegmentPart._parentSegment.ArcLength, dv._parentSegmentPart._fromRoot, dv._parentSegmentPart._toRoot);
+            _dualGraph.AddRange(collection);
         }
     }
 
     // ReSharper disable once UnusedMember.Local
     private void PrintDualGraph()
     {
-        for (int i = 0; i < DualGraph.Count; i++)
+        for (int i = 0; i < _dualGraph.Count; i++)
         {
             string s = "DV " +
                        i +
                        " " +
-                       DualGraph[i].ParentSegmentPart.Item1.Id +
+                       _dualGraph[i]._parentSegmentPart._parentSegment.Id +
                        " " +
-                       DualGraph[i].ParentSegmentPart.Item2 +
+                       _dualGraph[i]._parentSegmentPart._fromRoot +
                        " " +
-                       DualGraph[i].ParentSegmentPart.Item3 + " " + DualGraph[i].Distance + "\nFl : ";
+                       _dualGraph[i]._parentSegmentPart._toRoot + " " + _dualGraph[i].Distance + "\nFl : ";
 
-            foreach (var fol in DualGraph[i].Followers) s   += DualGraph.IndexOf(fol) + " ";
+            foreach (var fol in _dualGraph[i].Followers) s   += _dualGraph.IndexOf(fol) + " ";
             s                                               += "\nPr : ";
-            foreach (var pr in DualGraph[i].Predecessors) s += DualGraph.IndexOf(pr) + " ";
+            foreach (var pr in _dualGraph[i].Predecessors) s += _dualGraph.IndexOf(pr) + " ";
             Debug.Log(s);
         }
     }
 
     private void LinkDualGraph()
     {
-        foreach (var dv in DualGraph) dv.ParentSegmentPart.Item1.DualVertices.Add(dv);
+        foreach (var dv in _dualGraph) dv._parentSegmentPart._parentSegment.DualVertices.Add(dv);
     }
 
     private DualVertex FindOriginVertice(List<DualVertex> list, int i, double originRoot)
     {
         foreach (var tdv in list)
         {
-            if (_segments[i].ParentLane.Direction && Math.Abs(originRoot - tdv.ParentSegmentPart.Item2) < 0.011 ||
-                !_segments[i].ParentLane.Direction && Math.Abs(originRoot - tdv.ParentSegmentPart.Item3) < 0.011)
+            if (_segments[i].ParentLane.Direction && Math.Abs(originRoot - tdv._parentSegmentPart._fromRoot) < 0.011 ||
+                !_segments[i].ParentLane.Direction && Math.Abs(originRoot - tdv._parentSegmentPart._toRoot) < 0.011)
                 return tdv;
         }
         //Debug.LogError("Origin Vertice Not Found");
@@ -207,8 +555,8 @@ public class PiavRoadContainer : MonoBehaviour
         {
 
 
-            if (_segments[i].ParentLane.Direction && Math.Abs(targetRoot - tdv.ParentSegmentPart.Item3) < 0.011 ||
-                !_segments[i].ParentLane.Direction && Math.Abs(targetRoot - tdv.ParentSegmentPart.Item2) < 0.011)
+            if (_segments[i].ParentLane.Direction && Math.Abs(targetRoot - tdv._parentSegmentPart._toRoot) < 0.011 ||
+                !_segments[i].ParentLane.Direction && Math.Abs(targetRoot - tdv._parentSegmentPart._fromRoot) < 0.011)
                 return tdv;
         }
         //Debug.LogError("Target Vertice Not Found");
@@ -710,38 +1058,35 @@ public class PiavRoadContainer : MonoBehaviour
                         var originPoint = RoadUtilities.Calculate(originLane.ChildSegments[originLane.ChildSegments.Length - 1].Polynomial, 1);
                         var targetSegmentRoot    = FindClosestSegmentInLane(targetLane, originPoint);
 
-                        if (targetSegmentRoot != null && targetSegmentRoot.Item1 != null)
+                        if (targetSegmentRoot._segment != null)
                             if (originLane.Direction)
                             {
-                                var finalTargetRoot = RoadUtilities.GetProjection(
-                                                                                  targetSegmentRoot.Item1.ArcLength,
-                                                                                  targetSegmentRoot.Item1.InvArcLength,
-                                                                                  targetSegmentRoot.Item2,
+                                var finalTargetRoot = RoadUtilities.GetProjection(targetSegmentRoot._segment,
+                                                                                  targetSegmentRoot._root,
                                                                                   targetLane.Direction ? 4 : -4);
                                 MakeIntermediateContact(
-                                                        RoadUtilities.Calculate(targetSegmentRoot.Item1.Polynomial, finalTargetRoot.Item2),
+                                                        RoadUtilities.Calculate(targetSegmentRoot._segment.Polynomial, finalTargetRoot._targetRoot),
                                                         originPoint,
                                                         originLane,
-                                                        targetSegmentRoot.Item1,
+                                                        targetSegmentRoot._segment,
                                                         originLane.ChildSegments[originLane.ChildSegments.Length - 1],
-                                                        finalTargetRoot.Item2,
+                                                        finalTargetRoot._targetRoot,
                                                         1);
                             }
                             else
                             {
                                 var finalTargetRoot = RoadUtilities.GetProjection(
-                                                                                  targetSegmentRoot.Item1.ArcLength,
-                                                                                  targetSegmentRoot.Item1.InvArcLength,
-                                                                                  targetSegmentRoot.Item2,
+                                                                                  targetSegmentRoot._segment,
+                                                                                  targetSegmentRoot._root,
                                                                                   targetLane.Direction ? -4 : 4);
                                 MakeIntermediateContact(
                                                         originPoint,
-                                                        RoadUtilities.Calculate(targetSegmentRoot.Item1.Polynomial, finalTargetRoot.Item2),
+                                                        RoadUtilities.Calculate(targetSegmentRoot._segment.Polynomial, finalTargetRoot._targetRoot),
                                                         targetLane,
                                                         originLane.ChildSegments[originLane.ChildSegments.Length - 1],
-                                                        targetSegmentRoot.Item1,
+                                                        targetSegmentRoot._segment,
                                                         1,
-                                                        finalTargetRoot.Item2);
+                                                        finalTargetRoot._targetRoot);
                             }
                     }
                 }
@@ -760,39 +1105,37 @@ public class PiavRoadContainer : MonoBehaviour
                         var originPoint = RoadUtilities.Calculate(originLane.ChildSegments[0].Polynomial, 0);
                         var targetSegmentRoot = FindClosestSegmentInLane(targetLane, originPoint);
 
-                        if (targetSegmentRoot != null && targetSegmentRoot.Item1 != null)
+                        if (targetSegmentRoot._segment != null)
                             if (!originLane.Direction)
                             {
                                 var finalTargetRoot = RoadUtilities.GetProjection(
-                                                                                  targetSegmentRoot.Item1.ArcLength,
-                                                                                  targetSegmentRoot.Item1.InvArcLength,
-                                                                                  targetSegmentRoot.Item2,
+                                                                                  targetSegmentRoot._segment,
+                                                                                  targetSegmentRoot._root,
                                                                                   targetLane.Direction ? 4 : -4);
 
                                 MakeIntermediateContact(
-                                                        RoadUtilities.Calculate(targetSegmentRoot.Item1.Polynomial, finalTargetRoot.Item2),
+                                                        RoadUtilities.Calculate(targetSegmentRoot._segment.Polynomial, finalTargetRoot._targetRoot),
                                                         originPoint,
                                                         originLane,
-                                                        targetSegmentRoot.Item1,
+                                                        targetSegmentRoot._segment,
                                                         originLane.ChildSegments[0],
-                                                        finalTargetRoot.Item2,
+                                                        finalTargetRoot._targetRoot,
                                                         0);
                             }
                             else
                             {
                                 var finalTargetRoot = RoadUtilities.GetProjection(
-                                                                                  targetSegmentRoot.Item1.ArcLength,
-                                                                                  targetSegmentRoot.Item1.InvArcLength,
-                                                                                  targetSegmentRoot.Item2,
+                                                                                  targetSegmentRoot._segment,
+                                                                                  targetSegmentRoot._root,
                                                                                   targetLane.Direction ? -4 : 4);
                                 MakeIntermediateContact(
                                                         originPoint,
-                                                        RoadUtilities.Calculate(targetSegmentRoot.Item1.Polynomial, finalTargetRoot.Item2),
+                                                        RoadUtilities.Calculate(targetSegmentRoot._segment.Polynomial, finalTargetRoot._targetRoot),
                                                         originLane,
                                                         originLane.ChildSegments[0],
-                                                        targetSegmentRoot.Item1,
+                                                        targetSegmentRoot._segment,
                                                         0,
-                                                        finalTargetRoot.Item2);
+                                                        finalTargetRoot._targetRoot);
                             }
                     }
                 }
@@ -812,13 +1155,13 @@ public class PiavRoadContainer : MonoBehaviour
             var anchor = new Vector3(x, y, z);
             var res = FindClosestSegmentInRoad(road, anchor, LaneType.Vehicle);
 
-            if (res != null && res.Item1 != null)
+            if (res._segment != null)
             {
                 var stp = new StoppingPoint()
                 {
-                    OriginId      = road.Id,
-                    ParentSegment = res.Item1,
-                    Root          = res.Item2,
+                    Origin      = null,
+                    ParentSegment = res._segment,
+                    Root          = res._root,
                     Type          = (StoppingType)int.Parse(node.Attributes["type"].Value, CultureInfo.InvariantCulture)
                 };
 
@@ -865,12 +1208,12 @@ public class PiavRoadContainer : MonoBehaviour
             var anchor = new Vector3(x,y,z);
             var res = FindClosestSegmentInRoad(road, anchor, LaneType.Vehicle);
 
-            if (res != null && res.Item1 != null)
+            if (res._segment != null)
             {
                 var ps = new ParkingSpace()
                 {
-                    ParentSegment = res.Item1,
-                    Root          = res.Item2,
+                    ParentSegment = res._segment,
+                    Root          = res._root,
                     Position      = new Vector3(x, y, z),
                     Direction     = new Vector3(xd, yd, zd),
                     MyType        = (ParkingType)int.Parse(node.Attributes["type"].Value, CultureInfo.InvariantCulture)
@@ -893,7 +1236,14 @@ public class PiavRoadContainer : MonoBehaviour
         return null;
     }
 
-    public Tuple<Segment,double> FindClosestSegmentInRoad(Road road, Vector3 pos, LaneType type)
+    [Serializable]
+    internal struct PolyPoint
+    {
+        internal Segment _segment;
+        internal double _root;
+    }
+
+    internal PolyPoint FindClosestSegmentInRoad(Road road, Vector3 pos, LaneType type)
     {
         Segment closestSegment  = null;
         double  closestRoot     = double.NaN;
@@ -906,19 +1256,19 @@ public class PiavRoadContainer : MonoBehaviour
                 {
                     var possibleRoot = RoadUtilities.GetClosestRoot(segment.Polynomial, pos);
 
-                    if (possibleRoot.Item2 < minimalDistance)
+                    if (possibleRoot._distance < minimalDistance)
                     {
-                        minimalDistance = possibleRoot.Item2;
+                        minimalDistance = possibleRoot._distance;
                         closestSegment  = segment;
-                        closestRoot     = possibleRoot.Item1;
+                        closestRoot     = possibleRoot._root;
                     }
                 }
         }
 
-        return new Tuple<Segment, double>(closestSegment,closestRoot);
+        return new PolyPoint{_segment = closestSegment,_root = closestRoot};
     }
 
-    public Tuple<Segment, double> FindClosestSegmentInLane(Lane lane, Vector3 pos)
+    internal PolyPoint FindClosestSegmentInLane(Lane lane, Vector3 pos)
     {
         Segment closestSegment  = null;
         double  closestRoot     = double.NaN;
@@ -928,18 +1278,18 @@ public class PiavRoadContainer : MonoBehaviour
         {
             var possibleRoot = RoadUtilities.GetClosestRoot(segment.Polynomial, pos);
 
-            if (possibleRoot.Item2 < minimalDistance)
+            if (possibleRoot._distance < minimalDistance)
             {
-                minimalDistance = possibleRoot.Item2;
+                minimalDistance = possibleRoot._distance;
                 closestSegment  = segment;
-                closestRoot     = possibleRoot.Item1;
+                closestRoot     = possibleRoot._root;
             }
         }
 
-        return new Tuple<Segment, double>(closestSegment, closestRoot);
+        return new PolyPoint{_segment = closestSegment, _root = closestRoot};
     }
 
-    public Tuple<Segment, double> FindClosestSegment(Vector3 pos, LaneType type)
+    internal PolyPoint FindClosestSegment(Vector3 pos, LaneType type)
     {
         if (_segments != null)
         {
@@ -953,27 +1303,36 @@ public class PiavRoadContainer : MonoBehaviour
                 {
                     var possibleRoot = RoadUtilities.GetClosestRoot(segment.Polynomial, pos);
 
-                    if (possibleRoot.Item2 < minimalDistance)
+                    if (possibleRoot._distance < minimalDistance)
                     {
-                        minimalDistance = possibleRoot.Item2;
+                        minimalDistance = possibleRoot._distance;
                         closestSegment  = segment;
-                        closestRoot     = possibleRoot.Item1;
+                        closestRoot     = possibleRoot._root;
                     }
                 }
             }
 
-            return new Tuple<Segment, double>(closestSegment, closestRoot);
+            return new PolyPoint{_segment = closestSegment, _root = closestRoot};
         }
 
-        return null;
+        return new PolyPoint();
+    }
+
+    [Serializable]
+    internal struct ValuedSegment
+    {
+        internal Segment _segment;
+        internal double _root;
+        internal double _distance;
+        internal double _heuristic;
     }
 
     // return segment, root, distance
-    private List<Tuple<Segment, double, double,double>> FindAllSegmentsWithinLaneWidth(Vector3 pos, LaneType type, Vector3 direction)
+    private List<ValuedSegment> FindAllSegmentsWithinLaneWidth(Vector3 pos, LaneType type, Vector3 direction)
     {
         if (_segments != null)
         {
-            var res = new List<Tuple<Segment, double, double,double>>();
+            var res = new List<ValuedSegment>();
 
             foreach (var segment in _segments)
             {
@@ -981,44 +1340,44 @@ public class PiavRoadContainer : MonoBehaviour
                 {
                     var possibleRoot = RoadUtilities.GetClosestRootWithoutYComponent(segment.Polynomial, pos);
 
-                    if (possibleRoot.Item2 < segment.ParentLane.Width)
+                    if (possibleRoot._distance < segment.ParentLane.Width)
                     {
-                        var dot = Vector3.Dot(RoadUtilities.CalculateFirstDerivative(segment.Polynomial, possibleRoot.Item1).normalized, direction.normalized);
-                        res.Add(new Tuple<Segment, double, double,double>(segment,possibleRoot.Item1, possibleRoot.Item2,dot/(possibleRoot.Item2 + 1)*(segment.ParentLane.Direction?-1:1)));
+                        var dot = Vector3.Dot(RoadUtilities.CalculateFirstDerivative(segment.Polynomial, possibleRoot._root).normalized, direction.normalized);
+                        res.Add(new ValuedSegment{_segment = segment,_root = possibleRoot._root, _distance = possibleRoot._distance,_heuristic = dot/(possibleRoot._distance + 1)*(segment.ParentLane.Direction?-1:1)});
                     }
                 }
             }
-            res.Sort((t1,t2) => t2.Item4.CompareTo(t1.Item4));
+            res.Sort((t1,t2) => t2._heuristic.CompareTo(t1._heuristic));
             return res;
         }
 
-        return new List<Tuple<Segment, double,double,double>>();
+        return new List<ValuedSegment>();
     }
 
-    internal Tuple<Segment, double> FindRandomSegmentAndRoot()
+    internal PolyPoint FindRandomSegmentAndRoot()
     {
-        return new Tuple<Segment, double>(_segments[(int)(UnityEngine.Random.value * _segments.Count)],UnityEngine.Random.value);
+        return new PolyPoint{_segment = _segments[(int)(UnityEngine.Random.value * _segments.Count)],_root = UnityEngine.Random.value};
     }
 
-    internal Tuple<Segment, double> FindClosestAdjacentSegment(Vector3 pos, Segment originSegment)
+    internal PolyPoint FindClosestAdjacentSegment(Vector3 pos, Segment originSegment)
     {
         Segment closestSegment  = null;
         double  closestRoot     = double.NaN;
         double  minimalDistance = double.MaxValue;
 
         var selfRoot = RoadUtilities.GetClosestRoot(originSegment.Polynomial, pos);
-        if(selfRoot.Item1 > 0 && selfRoot.Item1 < 1)
+        if(selfRoot._root > 0 && selfRoot._root < 1)
 
         foreach (var contact in originSegment.Contacts)
         {
 
             var possibleRoot = RoadUtilities.GetClosestRoot(contact.Target.Polynomial, pos);
 
-            if (possibleRoot.Item2 < minimalDistance)
+            if (possibleRoot._distance < minimalDistance)
             {
-                minimalDistance = possibleRoot.Item2;
+                minimalDistance = possibleRoot._distance;
                 closestSegment  = contact.Target;
-                closestRoot     = possibleRoot.Item1;
+                closestRoot     = possibleRoot._root;
             }
         }
 
@@ -1027,15 +1386,15 @@ public class PiavRoadContainer : MonoBehaviour
 
             var possibleRoot = RoadUtilities.GetClosestRoot(contact.Origin.Polynomial, pos);
 
-            if (possibleRoot.Item2 < minimalDistance)
+            if (possibleRoot._distance < minimalDistance)
             {
-                minimalDistance = possibleRoot.Item2;
+                minimalDistance = possibleRoot._distance;
                 closestSegment  = contact.Target;
-                closestRoot     = possibleRoot.Item1;
+                closestRoot     = possibleRoot._root;
             }
         }
 
-        return new Tuple<Segment, double>(closestSegment, closestRoot);
+        return new PolyPoint{_segment = closestSegment, _root = closestRoot};
     }
 
     private void OnDrawGizmos()
@@ -1093,23 +1452,23 @@ public class PiavRoadContainer : MonoBehaviour
     {
         Gizmos.color = Color.white;
 
-        if (_segments != null && _segments.Count != 0 && DualGraph.Count != 0)
-            foreach (var dv in DualGraph)
+        if (_segments != null && _segments.Count != 0 && _dualGraph.Count != 0)
+            foreach (var dv in _dualGraph)
             {
-                var st = RoadUtilities.Calculate(dv.ParentSegmentPart.Item1.Polynomial, dv.ParentSegmentPart.Item2);
-                var en = RoadUtilities.Calculate(dv.ParentSegmentPart.Item1.Polynomial, dv.ParentSegmentPart.Item3);
+                var st = RoadUtilities.Calculate(dv._parentSegmentPart._parentSegment.Polynomial, dv._parentSegmentPart._fromRoot);
+                var en = RoadUtilities.Calculate(dv._parentSegmentPart._parentSegment.Polynomial, dv._parentSegmentPart._toRoot);
                 Gizmos.DrawLine(st, en);
             }
     }
 
     private void DrawRequestedGizmos()
     {
-        foreach (var t in GizmosRequests)
+        foreach (var t in _gizmosRequests)
         {
-            Gizmos.color = t.Item3;
-            foreach (var v in t.Item1) Gizmos.DrawSphere(v, 0.5f);
+            Gizmos.color = t._requestedColor;
+            foreach (var v in t._points) Gizmos.DrawSphere(v, 0.5f);
         }
-        GizmosRequests.Clear();
+        _gizmosRequests.Clear();
     }
 
     #region Variables
@@ -1124,10 +1483,18 @@ public class PiavRoadContainer : MonoBehaviour
     internal List<Segment> _segments;
     internal List<PiavRoadAgent> _cars;
 
-    [HideInInspector] public List<DualVertex> DualGraph = new List<DualVertex>();
-    [HideInInspector] public List<Tuple<List<Vector3>, Type, Color>> GizmosRequests = new List<Tuple<List<Vector3>, Type, Color>>();
+    [HideInInspector] internal List<DualVertex> _dualGraph = new List<DualVertex>();
+    [HideInInspector] internal List<RequestedGizmo> _gizmosRequests = new List<RequestedGizmo>();
 
     #endregion
+
+    [Serializable]
+    internal struct RequestedGizmo
+    {
+        internal List<Vector3> _points;
+        internal Type _origin;
+        internal Color _requestedColor;
+    }
 }
 
 public class DualVertex
@@ -1135,7 +1502,7 @@ public class DualVertex
     internal DualVertex(int id, double startRt, double endRt, Segment parent)
     {
         Id = id;
-        ParentSegmentPart = new Tuple<Segment, double, double>(parent,startRt,endRt);
+        _parentSegmentPart = new SegmentPart{_parentSegment = parent,_fromRoot = startRt,_toRoot = endRt};
     }
 
     public int Id;
@@ -1143,7 +1510,7 @@ public class DualVertex
     public List<DualVertex> Followers    = new List<DualVertex>();
 
     public double                               Distance;
-    public Tuple<Segment, double, double> ParentSegmentPart;
+    internal SegmentPart _parentSegmentPart;
 
     public double AccumulatedDistance;
     public DualVertex PathPredecessor;
@@ -1153,10 +1520,18 @@ public class DualVertex
     /// <inheritdoc />
     public override string ToString()
     {
-        return "Dual Vertice " + ParentSegmentPart.Item1.Id + " (" + ParentSegmentPart.Item2 + " - " + ParentSegmentPart.Item3 + ")";
+        return "Dual Vertice " + _parentSegmentPart._parentSegment.Id + " (" + _parentSegmentPart._fromRoot + " - " + _parentSegmentPart._toRoot + ")";
     }
 
     #endregion
+
+    [Serializable]
+    internal struct SegmentPart
+    {
+        internal Segment _parentSegment;
+        internal double _fromRoot;
+        internal double _toRoot;
+    }
 }
 
 internal enum ContactStart

@@ -12,7 +12,7 @@ internal abstract class AiBehavior
 
     protected void SetProjectionGizmo(List<Vector3> target, Color color)
     {
-        _parentContainer.GizmosRequests.Add(new Tuple<List<Vector3>, Type, Color>(target, GetType(), color));
+        _parentContainer._gizmosRequests.Add(new PiavRoadContainer.RequestedGizmo { _points = target, _origin = GetType(), _requestedColor = color });
     }
 
     internal abstract void Update(PiavRoadAgent agent);

@@ -6,13 +6,13 @@ using UnityEngine;
 internal class BehaviorFindPath : AiBehavior
 {
 
-    private List<Tuple<Segment, double, double>> GetPath(Segment startSegment, double startRoot, Segment endSegment, double endRoot)
+    private List<DualVertex.SegmentPart> GetPath(Segment startSegment, double startRoot, Segment endSegment, double endRoot)
     {
         var startVertex = FindDualVertex(startSegment, startRoot);
         var endVertex = FindDualVertex(endSegment, endRoot);
         //Debug.Log(startVertex.Id + " " + endVertex.Id);
 
-        foreach (var dualVertex in _parentContainer.DualGraph)
+        foreach (var dualVertex in _parentContainer._dualGraph)
         {
             dualVertex.AccumulatedDistance = double.NaN;
             dualVertex.PathPredecessor = null;
@@ -25,7 +25,7 @@ internal class BehaviorFindPath : AiBehavior
         while (toSearch.Count != 0)
         {
             if (toSearch[0] == endVertex)
-                if (startVertex.ParentSegmentPart.Item1.ParentLane.Direction && endRoot <= startRoot || !startVertex.ParentSegmentPart.Item1.ParentLane.Direction && endRoot >= startRoot)
+                if (startVertex._parentSegmentPart._parentSegment.ParentLane.Direction && endRoot <= startRoot || !startVertex._parentSegmentPart._parentSegment.ParentLane.Direction && endRoot >= startRoot)
                     return BuildPath(endVertex);
 
             foreach (var c in toSearch[0].Followers)
@@ -41,7 +41,7 @@ internal class BehaviorFindPath : AiBehavior
             toSearch.Sort((a, b) => a.AccumulatedDistance.CompareTo(b.AccumulatedDistance));
         }
 
-        return new List<Tuple<Segment, double, double>>();
+        return new List<DualVertex.SegmentPart>();
     }
 
     private DualVertex FindDualVertex(Segment segment, double root)
@@ -57,10 +57,10 @@ internal class BehaviorFindPath : AiBehavior
             Debug.LogWarning("FindDualVertex called with root " + root + ". Setting to 1");
         }
 
-        foreach (var sdv in segment.DualVertices) if (root >= sdv.ParentSegmentPart.Item2 && root <= sdv.ParentSegmentPart.Item3) return sdv;
+        foreach (var sdv in segment.DualVertices) if (root >= sdv._parentSegmentPart._fromRoot && root <= sdv._parentSegmentPart._toRoot) return sdv;
 
         Debug.LogWarning(segment.Id + " " + root + " " + segment.DualVertices.Count);
-        foreach (var sdv in segment.DualVertices) Debug.Log(sdv.ParentSegmentPart.Item2 + " " + sdv.ParentSegmentPart.Item3);
+        foreach (var sdv in segment.DualVertices) Debug.Log(sdv._parentSegmentPart._fromRoot + " " + sdv._parentSegmentPart._toRoot);
         return null;
     }
 
@@ -69,28 +69,28 @@ internal class BehaviorFindPath : AiBehavior
     {
         string s = "";
 
-        foreach (var dv in _parentContainer.DualGraph)
-            s += "\n" + dv.Id + " " + (dv.PathPredecessor?.Id.ToString() ?? "X") + " " + dv.AccumulatedDistance + " " + dv.ParentSegmentPart.Item1.Id + " " + dv.ParentSegmentPart.Item2 + " " + dv.ParentSegmentPart.Item3;
+        foreach (var dv in _parentContainer._dualGraph)
+            s += "\n" + dv.Id + " " + (dv.PathPredecessor?.Id.ToString() ?? "X") + " " + dv.AccumulatedDistance + " " + dv._parentSegmentPart._parentSegment.Id + " " + dv._parentSegmentPart._fromRoot + " " + dv._parentSegmentPart._toRoot;
 
         Debug.Log(s);
     }
 
-    private List<Tuple<Segment, double, double>> BuildPath(DualVertex check)
+    private List<DualVertex.SegmentPart> BuildPath(DualVertex check)
     {
-        var resPath = new List<Tuple<Segment, double, double>>();
+        var resPath = new List<DualVertex.SegmentPart>();
 
         var last = check;
-        resPath.Add(check.ParentSegmentPart);
+        resPath.Add(check._parentSegmentPart);
         if (last.Predecessors == null) return null;
 
         //*
         while (last.PathPredecessor != null)
         {
-            resPath.Add(last.PathPredecessor.ParentSegmentPart);
+            resPath.Add(last.PathPredecessor._parentSegmentPart);
             last = last.PathPredecessor;
         }
 
-        var newList = new Tuple<Segment, double, double>[resPath.Count];
+        var newList = new DualVertex.SegmentPart[resPath.Count];
         for (int i = resPath.Count - 1; i >= 0; i--) newList[resPath.Count - 1 - i] = resPath[i];
 
         return newList.ToList();
@@ -98,17 +98,17 @@ internal class BehaviorFindPath : AiBehavior
 
     internal override void Update(PiavRoadAgent agent)
     {
-        if (_parentContainer.DualGraph != null && agent.CurrentSegments != null && agent.CurrentSegments.Count != 0)
+        if (_parentContainer._dualGraph != null && agent.CurrentSegments != null && agent.CurrentSegments.Count != 0)
             if (_parentAi._profile._needTargetDestination)
 
             {
                 var s = agent.CurrentSegments[0];
 
-                agent.DesiredIncomingPath = GetPath(
-                                                    s.Item1,
-                                                    s.Item2,
-                                                    _parentAi._profile._targetDestination.Item1,
-                                                    _parentAi._profile._targetDestination.Item2);
+                agent._desiredIncomingPath = GetPath(
+                                                    s._segment,
+                                                    s._root,
+                                                    _parentAi._profile._targetDestination._segment,
+                                                    _parentAi._profile._targetDestination._root);
                 _parentAi._profile._needTargetDestination = false;
             }
     }

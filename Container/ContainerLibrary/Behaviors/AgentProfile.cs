@@ -7,7 +7,7 @@ internal class AgentProfile
     #region Variables
 
     //public float ForcedSlmTime;
-    internal List<Tuple<double,Type>> _forcedSpeedLimitValues = new List<Tuple<double, System.Type>>();
+    internal List<PiavRoadContainer.SpeedLimitation> _forcedSpeedLimitValues = new List<PiavRoadContainer.SpeedLimitation>();
 
     /*
     public int PerpetratorId = -1;
@@ -34,7 +34,7 @@ internal class AgentProfile
         */
 
     internal bool _needTargetDestination;
-    internal Tuple<Segment,double> _targetDestination;
+    internal PiavRoadContainer.PolyPoint _targetDestination;
 
 
     /*
@@ -51,7 +51,7 @@ internal class AgentProfile
         double minSpeed = double.PositiveInfinity;
 
         foreach (var m in _forcedSpeedLimitValues)
-            if (m.Item1 < minSpeed) minSpeed = m.Item1;
+            if (m._value < minSpeed) minSpeed = m._value;
 
         return double.IsPositiveInfinity(minSpeed)? double.NaN:minSpeed;
     }

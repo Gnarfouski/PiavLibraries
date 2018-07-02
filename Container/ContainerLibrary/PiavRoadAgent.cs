@@ -6,15 +6,24 @@ public class PiavRoadAgent : MonoBehaviour
 {
     #region Variables
 
-    [Tooltip("Top-down dimensions <width,height>")]
+    [Tooltip("Agent dimensions <width,height>")]
     public Vector2 Dimensions;
+    [Tooltip("Length of fixed items attached to the agent, such as a baby carrier or a trailer <pushed,towed>")]
+    public Vector2 AdditionalLength;
 
-    [Tooltip("Segment, root, distance, currentDot")]
-    private List<Tuple<Segment, double,double,double>> _curSgm;
+    [Tooltip("Segment, root, distance, heuristic")]
+    private List<PiavRoadContainer.ValuedSegment> _curSgm;
     private double  _curAbsSp = double.NaN;
     //private Vector3 _curMdir;
     private Vector3 _curFdir;
     private Vector3 _curPos;
+    private PiavRoadContainer.StoppingDataPackage _curStops;
+
+    internal PiavRoadContainer.StoppingDataPackage CurrentStops
+    {
+        get { return _curStops; }
+        set { _curStops = value; }
+    }
 
     internal Vector3 CurrentPosition
     {
@@ -40,7 +49,7 @@ public class PiavRoadAgent : MonoBehaviour
         set { _curAbsSp = value; }
     }
 
-    internal List<Tuple<Segment,double,double,double>> CurrentSegments
+    internal List<PiavRoadContainer.ValuedSegment> CurrentSegments
     {
         get { return _curSgm; }
         set { _curSgm = value; }
@@ -52,10 +61,13 @@ public class PiavRoadAgent : MonoBehaviour
     [HideInInspector, Range(-1, 1)] public double DesiredSteer;
     [HideInInspector, Range(0, 3)] public int DesiredHeadlightState;
     [HideInInspector] public bool DesiredBrakelightState;
-    [HideInInspector, Tooltip("<left,right>")] public Tuple<bool, bool> DesiredTurnSignalState;
+    [HideInInspector] public bool DesiredLeftTurnSignalState;
+    [HideInInspector] public bool DesiredRightTurnSignalState;
     [HideInInspector] public bool DesiredHornState;
     [HideInInspector] public bool DesiredSirenState;
-    [HideInInspector] public List<Tuple<Segment,double,double>> DesiredIncomingPath = new List<Tuple<Segment, double, double>>();
+    [HideInInspector] internal List<DualVertex.SegmentPart> _desiredIncomingPath = new List<DualVertex.SegmentPart>();
 
     #endregion
+
+
 }

@@ -1,14 +1,13 @@
 ﻿using System;
 using System.Linq;
-using System.Runtime.CompilerServices;
 
 /// <summary>
 /// Class implementing LU decomposition
 /// </summary>
 internal class LuDecomposition
 {
-    public double[,] L { private set; get; }
-    public double[,] U { private set; get; }
+    private double[,] L { set; get; }
+    private double[,] U { set; get; }
 
     private int[]    _permutation;
     private double[] _rowBuffer;
@@ -33,12 +32,11 @@ internal class LuDecomposition
 
         _permutation = Enumerable.Range(0, rows).ToArray();
 
-        double singular = 0;
         int    pivotRow = 0;
 
         for (int k = 0; k < cols - 1; k++)
         {
-            singular = 0;
+            double singular = 0;
 
             // find the pivot row
             for (int i = k; i < rows; i++)
@@ -50,17 +48,11 @@ internal class LuDecomposition
                 }
             }
 
-            if (singular == 0)
-            {
-                new ArgumentException("Matrix is singlar");
-            }
+            if (Math.Abs(singular) < 0.0000001) throw new ArgumentException("Matrix is singular");
 
             Swap(ref _permutation[k], ref _permutation[pivotRow]);
 
-            for (int i = 0; i < k; i++)
-            {
-                Swap(ref L[k, i], ref L[pivotRow, i]);
-            }
+            for (int i = 0; i < k; i++) Swap(ref L[k, i], ref L[pivotRow, i]);
 
             SwapRows(U, k, pivotRow);
 
@@ -68,39 +60,27 @@ internal class LuDecomposition
             {
                 L[i, k] = U[i, k] / U[k, k];
 
-                for (int j = k; j < cols; j++)
-                {
-                    U[i, j] = U[i, j] - L[i, k] * U[k, j];
-                }
+                for (int j = k; j < cols; j++) U[i, j] = U[i, j] - L[i, k] * U[k, j];
             }
         }
     }
 
     public double[,] Solve(double[,] matrix)
     {
-        if (matrix.Rows() != L.Rows())
-        {
-            throw new ArgumentException("Invalid matrix size");
-        }
+        if (matrix.Rows() != L.Rows()) throw new ArgumentException("Invalid matrix size");
 
-        double[,] ret = new double[matrix.Rows(), matrix.Cols()];
-        double[]  vec = new double[matrix.Rows()];
+        var ret = new double[matrix.Rows(), matrix.Cols()];
+        var  vec = new double[matrix.Rows()];
 
         // solve each column
         for (int col = 0; col < matrix.Cols(); col++)
         {
-            for (int j = 0; j < matrix.Rows(); j++)
-            {
-                vec[j] = matrix[_permutation[j], col];
-            }
+            for (int j = 0; j < matrix.Rows(); j++) vec[j] = matrix[_permutation[j], col];
             var forwardSub = ForwardSub(L, vec);
             var backSub    = BackSub(U, forwardSub);
 
             // copy the backward subsituted values to the result column
-            for (int k = 0; k < backSub.Length; k++)
-            {
-                ret[k, col] = backSub[k];
-            }
+            for (int k = 0; k < backSub.Length; k++) ret[k, col] = backSub[k];
         }
 
         return ret;
@@ -108,20 +88,14 @@ internal class LuDecomposition
 
     public double[] Solve(double[] vector)
     {
-        if (U.Rows() != vector.Length)
-        {
-            throw new ArgumentException("Argument matrix has wrong number of rows");
-        }
+        if (U.Rows() != vector.Length) throw new ArgumentException("Argument matrix has wrong number of rows");
 
-        double[] vec = new double[vector.Length];
+        var vec = new double[vector.Length];
 
-        for (int i = 0; i < vector.Length; i++)
-        {
-            vec[i] = vector[_permutation[i]];
-        }
+        for (int i = 0; i < vector.Length; i++) vec[i] = vector[_permutation[i]];
 
-        double[] z = ForwardSub(L, vec);
-        double[] x = BackSub(U, z);
+        var z = ForwardSub(L, vec);
+        var x = BackSub(U, z);
 
         return x;
     }
@@ -129,16 +103,13 @@ internal class LuDecomposition
     private double[] ForwardSub(double[,] matrix, double[] b)
     {
         int      rows = L.Rows();
-        double[] ret  = new double[rows];
+        var ret  = new double[rows];
 
         for (int i = 0; i < rows; i++)
         {
             ret[i] = b[i];
 
-            for (int j = 0; j < i; j++)
-            {
-                ret[i] -= matrix[i, j] * ret[j];
-            }
+            for (int j = 0; j < i; j++) ret[i] -= matrix[i, j] * ret[j];
             ret[i] = ret[i] / matrix[i, i];
         }
 
@@ -148,23 +119,19 @@ internal class LuDecomposition
     private double[] BackSub(double[,] matrix, double[] b)
     {
         int      rows = L.Rows();
-        double[] ret  = new double[rows];
+        var ret  = new double[rows];
 
         for (int i = rows - 1; i > -1; i--)
         {
             ret[i] = b[i];
 
-            for (int j = rows - 1; j > i; j--)
-            {
-                ret[i] -= matrix[i, j] * ret[j];
-            }
+            for (int j = rows - 1; j > i; j--) ret[i] -= matrix[i, j] * ret[j];
             ret[i] = ret[i] / matrix[i, i];
         }
 
         return ret;
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void SwapRows(double[,] matrix, int rowA, int rowB)
     {
         int rowSize = 8 * matrix.Cols();
@@ -173,7 +140,6 @@ internal class LuDecomposition
         Buffer.BlockCopy(_rowBuffer, 0, matrix, rowA * rowSize, rowSize);
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void Swap<T>(ref T a, ref T b)
     {
         T c = a;

@@ -45,6 +45,7 @@
   <ItemGroup>
     <Compile Include="Behaviors\AgentProfile.cs" />
     <Compile Include="Behaviors\AiBehavior.cs" />
+    <Compile Include="Behaviors\BehaviorAdaptSpeedToSlowerVehicle.cs" />
     <Compile Include="Behaviors\BehaviorFindPath.cs" />
     <Compile Include="Behaviors\BehaviorFollowPath.cs" />
     <Compile Include="Behaviors\BehaviorLaneFollow.cs" />

@@ -9,8 +9,9 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>PiavRoadLibrary</RootNamespace>
     <AssemblyName>PiavRoadLibrary</AssemblyName>
-    <TargetFrameworkVersion>v4.6.1</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
+    <TargetFrameworkProfile />
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -35,28 +36,17 @@
     <Reference Include="Microsoft.CSharp" />
     <Reference Include="System.Data" />
     <Reference Include="System.Xml" />
-    <Reference Include="UnityEngine, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\..\..\..\..\Program Files\Unity\Editor\Data\Managed\UnityEngine.dll</HintPath>
-    </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="AdHocGradientDescent.cs" />
-    <Compile Include="Libraries\LUDecomposition.cs" />
-    <Compile Include="Libraries\Matrix.cs" />
-    <Compile Include="Libraries\PolyFit.cs" />
-    <Compile Include="PiavFullRoadXmlRegeneration.cs" />
-    <Compile Include="LaneTemplate.cs" />
-    <Compile Include="PiavParkingSpaceData.cs" />
+    <Compile Include="PiavRoadInterface.cs" />
+    <Compile Include="LUDecomposition.cs" />
+    <Compile Include="Matrix.cs" />
+    <Compile Include="PolyFit.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="QuadraticPolynomial.cs" />
-    <Compile Include="PiavRoadConfig.cs" />
-    <Compile Include="RoadContact.cs" />
-    <Compile Include="PiavRoadInterface.cs" />
-    <Compile Include="RoadMeshGeneration.cs" />
-    <Compile Include="RoadTemplate.cs" />
-    <Compile Include="RoadXmlGeneration.cs" />
-    <Compile Include="PiavStoppingData.cs" />
+    <Compile Include="Utilities.cs" />
+    <Compile Include="VectorExtensionsMethods.cs" />
+    <Compile Include="XmlMethods.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

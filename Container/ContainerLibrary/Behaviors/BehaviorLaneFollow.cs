@@ -8,11 +8,11 @@ internal class BehaviorLaneFollow : AiBehavior
     {
         if (agent != null && agent.CurrentSegments != null && agent.CurrentSegments.Count > 0)
         {
-            Tuple<Segment, double,double,double> chosenSegment = null;
-            if (agent.DesiredIncomingPath != null && agent.DesiredIncomingPath.Count > 0)
+            var chosenSegment = new PiavRoadContainer.ValuedSegment();
+            if (agent._desiredIncomingPath != null && agent._desiredIncomingPath.Count > 0)
                 foreach (var possibleSegment in agent.CurrentSegments)
                 {
-                    if (possibleSegment.Item1.Id == agent.DesiredIncomingPath[0].Item1.Id)
+                    if (possibleSegment._segment.Id == agent._desiredIncomingPath[0]._parentSegment.Id)
                     {
                         chosenSegment = possibleSegment;
                         break;
@@ -21,19 +21,22 @@ internal class BehaviorLaneFollow : AiBehavior
             else
                 chosenSegment = agent.CurrentSegments[0];
 
-            if (chosenSegment != null)
+            if (chosenSegment._segment != null)
             {
                 //Debug.Log(chosenSegment.Item1.Id + " " + chosenSegment.Item2);
-                var proj = _parentAi.ProjectPathLaneFromOrigin(3.5 + agent.Dimensions.y / 2, true);
+                var proj = _parentContainer.ProjectPathLaneFromOrigin(agent, 3.5 + agent.Dimensions.y / 2, true);
 
-                var target = RoadUtilities.Calculate(proj.Item2.Polynomial, proj.Item3);
+                var target = RoadUtilities.Calculate(proj._targetSegment.Polynomial, proj._targetRoot);
                 SetProjectionGizmo(new List<Vector3>() { target }, Color.cyan);
 
                 var direction = target - agent.CurrentPosition;
                 direction.y   = 0;
 
-                var angle2              = Vector3.Angle(direction, agent.CurrentFacingDirection);
-                var cross               = Vector3.Cross(direction, agent.CurrentFacingDirection);
+                var curDirection = agent.CurrentFacingDirection;
+                curDirection.y = 0;
+
+                var angle2              = Vector3.Angle(direction, curDirection);
+                var cross               = Vector3.Cross(direction, curDirection);
                 if (cross.y > 0) angle2 = -angle2;
 
                 //Debug.Log(angle2);

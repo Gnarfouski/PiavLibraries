@@ -1,5 +1,4 @@
 ﻿using System;
-using UnityEngine;
 
 internal class QuadraticPolynomial
 {
@@ -8,22 +7,28 @@ internal class QuadraticPolynomial
     /// These represent divider and lane ppolys.
     /// </summary>
 
-    /// <summary> The calculate method gives us a Vector3 position from a root situated between 0 and 1
+    /// <summary> The calculate method gives us a 3D position from a root situated between 0 and 1. Returns a double{x,y,z}.
     /// </summary>
-    internal Vector3 Calculate(double t)
+    internal double[] Calculate(double t)
     {
-        return new Vector3((float)(_coeffs[0, 0] * t * t + _coeffs[1, 0] * t + _coeffs[2, 0]),
-                           (float)(_coeffs[0, 1] * t * t + _coeffs[1, 1] * t + _coeffs[2, 1]),
-                           (float)(_coeffs[0, 2] * t * t + _coeffs[1, 2] * t + _coeffs[2, 2]));
+        return new[]
+        {
+            _coeffs[0, 0] * t * t + _coeffs[1, 0] * t + _coeffs[2, 0],
+            _coeffs[0, 1] * t * t + _coeffs[1, 1] * t + _coeffs[2, 1],
+            _coeffs[0, 2] * t * t + _coeffs[1, 2] * t + _coeffs[2, 2]
+        };
     }
 
     /// <summary> The first derivative is the Vector3 tangent to the space curve at target root
     /// </summary>
-    internal Vector3 CalculateFirstDerivative(double t)
+    internal double[] CalculateFirstDerivative(double t)
     {
-        return new Vector3((float)(2 * _coeffs[0, 0] * t + _coeffs[1, 0]),
-                           (float)(2 * _coeffs[0, 1] * t + _coeffs[1, 1]),
-                           (float)(2 * _coeffs[0, 2] * t + _coeffs[1, 2]));
+        return new[]
+        {
+            2 * _coeffs[0, 0] * t + _coeffs[1, 0],
+            2 * _coeffs[0, 1] * t + _coeffs[1, 1],
+            2 * _coeffs[0, 2] * t + _coeffs[1, 2]
+        };
     }
 
     /// <summary> The arc length is computed from the indefinite integral formula explicited in online docs.
@@ -103,6 +108,7 @@ internal class QuadraticPolynomial
 
     #region Variables
 
+    /// <summary>double[{x2,x1,x0},{x,y,z}]</summary>
     internal double[,] _coeffs = new double[3, 3];
 
     #endregion

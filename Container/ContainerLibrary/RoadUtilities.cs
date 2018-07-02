@@ -2,9 +2,17 @@
 using System;
 using System.Collections.Generic;
 
-internal static class RoadUtilities {
+internal static class RoadUtilities
+{
 
-    internal static Tuple<double, double> GetClosestRootWithoutYComponent(double[,] polynomial, Vector3 pos)
+    [Serializable]
+    internal struct CloseRoot
+    {
+        internal double _root;
+        internal double _distance;
+    }
+
+    internal static CloseRoot GetClosestRootWithoutYComponent(double[,] polynomial, Vector3 pos)
     {
         pos.y = 0;
 
@@ -28,15 +36,15 @@ internal static class RoadUtilities {
             c = c / a;
             d = d / a;
 
-            var res = RealRoots(d, c, b);
+            var res = GetRealRoots(d, c, b);
 
             var possibleRoots = new List<double>();
 
             foreach (var root in new[]
             {
-                res.Item1,
-                res.Item2,
-                res.Item3
+                res._root1,
+                res._root2,
+                res._root3
             })
             {
                 if (!double.IsNaN(root))
@@ -48,25 +56,26 @@ internal static class RoadUtilities {
                         possibleRoots.Add(root);
             }
 
-            var minRoot = -1.0;
+            var minRoot  = -1.0;
             var minValue = double.MaxValue;
 
             foreach (var t in possibleRoots)
             {
-                var local = Calculate(polynomial, t);
-                local.y = 0;
+                var local    = Calculate(polynomial, t);
+                local.y      = 0;
                 var distance = (local - pos).magnitude;
 
                 if (distance < minValue)
                 {
-                    minRoot = t;
+                    minRoot  = t;
                     minValue = distance;
                 }
             }
 
-            return new Tuple<double, double>(minRoot, minValue);
+            return new CloseRoot { _root = minRoot, _distance = minValue };
 
         }
+
         {
             var root = -1 *
                        (2 * polynomial[1, 0] * (polynomial[2, 0] - pos.x) +
@@ -78,16 +87,16 @@ internal static class RoadUtilities {
             if (root > 1) root = 1;
 
             var posR = Calculate(polynomial, root);
-            posR.y = pos.y;
+            posR.y   = pos.y;
 
-            return new Tuple<double, double>(root,(posR - pos).magnitude);
+            return new CloseRoot { _root = root, _distance = (posR - pos).magnitude };
         }
     }
 
     /// <summary>
     /// Returns a tuple (root, distanceToRoot)
     /// </summary>
-    internal static Tuple<double, double> GetClosestRoot(double[,] polynomial, Vector3 pos)
+    internal static CloseRoot GetClosestRoot(double[,] polynomial, Vector3 pos)
     {
 
         var a = 4.0 * Math.Pow(polynomial[0, 0], 2) +
@@ -115,15 +124,15 @@ internal static class RoadUtilities {
             c = c / a;
             d = d / a;
 
-            var res = RealRoots(d, c, b);
+            var res = GetRealRoots(d, c, b);
 
             var possibleRoots = new List<double>();
 
             foreach (var root in new[]
             {
-                res.Item1,
-                res.Item2,
-                res.Item3
+                res._root1,
+                res._root2,
+                res._root3
             })
             {
                 if (!double.IsNaN(root))
@@ -147,9 +156,10 @@ internal static class RoadUtilities {
                 }
             }
 
-            return new Tuple<double, double>(minRoot, minValue);
+            return new CloseRoot { _root = minRoot, _distance = minValue };
 
         }
+
         {
             var root = -1 *
                        (2 * polynomial[1, 0] * (polynomial[2, 0] - pos.x) +
@@ -162,7 +172,7 @@ internal static class RoadUtilities {
             if (root < 0) root = 0;
             if (root > 1) root = 1;
 
-            return new Tuple<double, double>(root, (Calculate(polynomial, root) - pos).magnitude);
+            return new CloseRoot { _root = root, _distance = (Calculate(polynomial, root) - pos).magnitude };
         }
     }
 
@@ -177,7 +187,13 @@ internal static class RoadUtilities {
         return Math.Pow(Math.Abs(n), 1.0 / 3.0) * Math.Sign(n);
     }
 
-    private static Tuple<double, double, double> RealRoots(double a0, double a1, double a2)
+    [Serializable]
+    internal struct RealRoots
+    {
+        internal double _root1, _root2, _root3;
+    }
+
+    private static RealRoots GetRealRoots(double a0, double a1, double a2)
     {
         Qr(a2, a1, a0, out var q, out var r);
         double num1 = q * q * q;
@@ -186,12 +202,14 @@ internal static class RoadUtilities {
         double num3 = double.NaN;
         double num4 = double.NaN;
         double num5;
+
         if (x >= 0.0)
         {
             double num6 = Math.Pow(x, 0.5);
             double num7 = PowThird(r + num6);
             double num8 = PowThird(r - num6);
             num5        = num2 + (num7 + num8);
+
             if (Math.Abs(x) < 0.000001)
                 num3 = num2 - num7;
         }
@@ -202,7 +220,8 @@ internal static class RoadUtilities {
             num3        = 2.0 * Math.Sqrt(-q) * Math.Cos((num6 + 2.0 * Math.PI) / 3.0) + num2;
             num4        = 2.0 * Math.Sqrt(-q) * Math.Cos((num6 - 2.0 * Math.PI) / 3.0) + num2;
         }
-        return new Tuple<double, double, double>(num5, num3, num4);
+
+        return new RealRoots{_root1 = num5, _root2 = num3, _root3 = num4};
     }
 
     public static Vector3 Calculate(double[,] polynomial, double root)
@@ -210,12 +229,14 @@ internal static class RoadUtilities {
         if (polynomial == null)
         {
             Debug.LogError("RoadUtilities.Calculate called with null polynomial reference");
+
             return Vector3.zero;
         }
 
         if (polynomial.GetLength(0) != 3 || polynomial.GetLength(1) != 3)
         {
             Debug.LogError("RoadUtilities.Calculate called with " + polynomial.GetLength(0) + " x " + polynomial.GetLength(1) + " size polynomial matrix (3 x 3 required)");
+
             return Vector3.zero;
         }
 
@@ -224,6 +245,7 @@ internal static class RoadUtilities {
             if (double.IsNaN(number))
             {
                 Debug.LogError("RoadUtilities.Calculate called with a NaN in the polynomial");
+
                 return Vector3.zero;
             }
         }
@@ -231,10 +253,12 @@ internal static class RoadUtilities {
         if (root < -0.1 || root > 1.1)
         {
             Debug.LogError("RoadUtilities.Calculate called with " + root + " root (range 0-1 required).");
+
             return Vector3.zero;
         }
 
-        return new Vector3((float)(polynomial[0, 0] * root * root + polynomial[1, 0] * root + polynomial[2, 0]),
+        return new Vector3(
+                           (float)(polynomial[0, 0] * root * root + polynomial[1, 0] * root + polynomial[2, 0]),
                            (float)(polynomial[0, 1] * root * root + polynomial[1, 1] * root + polynomial[2, 1]),
                            (float)(polynomial[0, 2] * root * root + polynomial[1, 2] * root + polynomial[2, 2]));
     }
@@ -244,12 +268,14 @@ internal static class RoadUtilities {
         if (polynomial == null)
         {
             Debug.LogError("RoadUtilities.CalculateFirstDerivative called with null polynomial reference");
+
             return Vector3.zero;
         }
 
         if (polynomial.GetLength(0) != 3 || polynomial.GetLength(1) != 3)
         {
             Debug.LogError("RoadUtilities.CalculateFirstDerivative called with " + polynomial.GetLength(0) + " x " + polynomial.GetLength(1) + " size polynomial matrix (3 x 3 required)");
+
             return Vector3.zero;
         }
 
@@ -258,6 +284,7 @@ internal static class RoadUtilities {
             if (double.IsNaN(number))
             {
                 Debug.LogError("RoadUtilities.CalculateFirstDerivative called with a NaN in the polynomial");
+
                 return Vector3.zero;
             }
         }
@@ -265,10 +292,12 @@ internal static class RoadUtilities {
         if (double.IsNaN(root) || root < -0.1 || root > 1.1)
         {
             Debug.LogError("RoadUtilities.CalculateFirstDerivative called with root " + root + " (range 0-1 required).");
+
             return Vector3.zero;
         }
 
-        return new Vector3((float)(2 * polynomial[0, 0] * root + polynomial[1, 0]),
+        return new Vector3(
+                           (float)(2 * polynomial[0, 0] * root + polynomial[1, 0]),
                            (float)(2 * polynomial[0, 1] * root + polynomial[1, 1]),
                            (float)(2 * polynomial[0, 2] * root + polynomial[1, 2]));
     }
@@ -278,55 +307,69 @@ internal static class RoadUtilities {
         if (startRoot < 0 || startRoot > 1 || endRoot < 0 || endRoot > 1)
         {
             Debug.LogError("RoadUtilities.GetArcLengthBetween called with roots " + startRoot + " | " + endRoot + " (must be between 0 and 1)");
+
             return double.NaN;
         }
+
         return
-            arcLengthValues[0] * endRoot * endRoot * endRoot + arcLengthValues[1] * endRoot * endRoot + arcLengthValues[2] * endRoot -
+            arcLengthValues[0] * endRoot * endRoot * endRoot +
+            arcLengthValues[1] * endRoot * endRoot +
+            arcLengthValues[2] * endRoot -
             (arcLengthValues[0] * startRoot * startRoot * startRoot + arcLengthValues[1] * startRoot * startRoot + arcLengthValues[2] * startRoot);
     }
 
     ///<summary> Returns a tuple (remaining distance, givendRoot)
     ///</summary>
-    public static Tuple<double, double> GetProjection(double[] arcLengthValues, double[] invarcLengthValues, double startRoot, double distance)
+    public static PiavRoadContainer.Projection GetProjection(Segment s, double startRoot, double distance)
     {
         if (startRoot < 0 || startRoot > 1)
         {
             Debug.LogError("RoadUtilities.GetProjection called with root " + startRoot + " (must be between 0 and 1)");
-            return new Tuple<double, double>(double.NaN, double.NaN);
+
+            return new PiavRoadContainer.Projection { _remainingDistance = double.NaN, _targetSegment = null, _targetRoot = double.NaN };
         }
 
         //Debug.Log("start root " + startRoot);
-        var startDistance = arcLengthValues[0] * startRoot * startRoot * startRoot +
-                            arcLengthValues[1] * startRoot * startRoot +
-                            arcLengthValues[2] * startRoot;
+        var startDistance = s.ArcLength[0] * startRoot * startRoot * startRoot +
+                            s.ArcLength[1] * startRoot * startRoot +
+                            s.ArcLength[2] * startRoot;
+
         //Debug.Log("start distance " + startDistance);
 
         if (startDistance + distance <= 0)
-            return new Tuple<double, double>(Math.Abs(startDistance) + distance, 0);
+            return new PiavRoadContainer.Projection { _remainingDistance = Math.Abs(startDistance) + distance, _targetSegment = s, _targetRoot = 0 };
 
-        var totalDistance = arcLengthValues[0] + arcLengthValues[1] + arcLengthValues[2];
+        var totalDistance = s.ArcLength[0] + s.ArcLength[1] + s.ArcLength[2];
+
         if (startDistance + distance >= totalDistance)
-            return new Tuple<double, double>(startDistance + distance - totalDistance, 1);
+            return new PiavRoadContainer.Projection { _remainingDistance = startDistance + distance - totalDistance, _targetSegment = s, _targetRoot = 1 };
 
         var finalDistance = startDistance + distance;
-        return new Tuple<double, double>(0,
-                                         invarcLengthValues[0] * finalDistance * finalDistance * finalDistance +
-                                         invarcLengthValues[1] * finalDistance * finalDistance +
-                                         invarcLengthValues[2] * finalDistance);
+
+        return new PiavRoadContainer.Projection
+        {
+            _remainingDistance = 0,
+            _targetSegment     = s,
+            _targetRoot        = s.InvArcLength[0] * finalDistance * finalDistance * finalDistance +
+                                 s.InvArcLength[1] * finalDistance * finalDistance +
+                                 s.InvArcLength[2] * finalDistance
+        };
     }
 
-    public static Tuple<double, double> GetProjectionTo(double[] arcLengthValues, double[] invarcLengthValues, double startRoot, double endRoot, double distance)
+    public static PiavRoadContainer.Projection GetProjectionTo(double[] arcLengthValues, double[] invarcLengthValues, Segment s, double startRoot, double endRoot, double distance)
     {
         if (startRoot < 0 || startRoot > 1 || endRoot < 0 || endRoot > 1)
         {
             Debug.LogError("RoadUtilities.GetProjectionTo called with roots " + startRoot + " " + endRoot + " (must be between 0 and 1)");
-            return new Tuple<double, double>(double.NaN, double.NaN);
+
+            return new PiavRoadContainer.Projection { _remainingDistance = double.NaN,_targetSegment = s,_targetRoot = double.NaN };
         }
 
         if (distance < 0)
         {
             Debug.LogError("RoadUtilities.GetProjectionTo called with distance " + distance + " (must be positive)");
-            return new Tuple<double, double>(double.NaN, double.NaN);
+
+            return new PiavRoadContainer.Projection { _remainingDistance = double.NaN, _targetSegment = s, _targetRoot = double.NaN };
         }
 
         var startDistance = arcLengthValues[0] * startRoot * startRoot * startRoot +
@@ -338,15 +381,22 @@ internal static class RoadUtilities {
                           arcLengthValues[2] * endRoot;
 
         if (startRoot >= endRoot && startDistance - distance <= endDistance)
-            return new Tuple<double, double>(Math.Abs(startDistance - distance), endRoot);
-        if(startRoot <= endRoot && startDistance + distance >= endDistance)
-            return new Tuple<double, double>(startDistance + distance - endDistance, endRoot);
+            return new PiavRoadContainer.Projection { _remainingDistance = Math.Abs(startDistance - distance), _targetSegment = s, _targetRoot = endRoot };
+
+        if (startRoot <= endRoot && startDistance + distance >= endDistance)
+            return new PiavRoadContainer.Projection { _remainingDistance = startDistance + distance - endDistance, _targetSegment = s, _targetRoot = endRoot };
 
         var finalDistance = startRoot <= endRoot ? startDistance + distance : startDistance - distance;
-        return new Tuple<double, double>(0,
-                                         invarcLengthValues[0] * finalDistance * finalDistance * finalDistance +
-                                         invarcLengthValues[1] * finalDistance * finalDistance +
-                                         invarcLengthValues[2] * finalDistance);
+
+        return new PiavRoadContainer.Projection
+        {
+            _remainingDistance = 0,
+            _targetSegment = s,
+            _targetRoot =
+                invarcLengthValues[0] * finalDistance * finalDistance * finalDistance +
+                invarcLengthValues[1] * finalDistance * finalDistance +
+                invarcLengthValues[2] * finalDistance
+        };
     }
 }
 

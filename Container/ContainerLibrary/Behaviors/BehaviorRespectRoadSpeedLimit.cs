@@ -13,19 +13,19 @@ internal class BehaviorRespectRoadSpeedLimit : BehaviorSpeedManagement
             {
                 var mas = agent.CurrentSegments[0];
 
-                if (mas != null)
+                if (mas._segment != null)
                     for (int i = 0; i < _parentAi._profile._forcedSpeedLimitValues.Count; i++)
                     {
-                        if (_parentAi._profile._forcedSpeedLimitValues[i].Item2 == GetType())
-                            _parentAi._profile._forcedSpeedLimitValues[i] = new Tuple<double, Type>(mas.Item1.ParentLane.SpeedLimit, GetType());
+                        if (_parentAi._profile._forcedSpeedLimitValues[i]._originBehaviorType == GetType())
+                            _parentAi._profile._forcedSpeedLimitValues[i] = new PiavRoadContainer.SpeedLimitation{_value = mas._segment.ParentLane.SpeedLimit, _originBehaviorType = GetType()};
                     }
             }
             else
             {
                 for (int i = 0; i < _parentAi._profile._forcedSpeedLimitValues.Count; i++)
                 {
-                    if (_parentAi._profile._forcedSpeedLimitValues[i].Item2 == GetType())
-                        _parentAi._profile._forcedSpeedLimitValues[i] = new Tuple<double, Type>(0, GetType());
+                    if (_parentAi._profile._forcedSpeedLimitValues[i]._originBehaviorType == GetType())
+                        _parentAi._profile._forcedSpeedLimitValues[i] = new PiavRoadContainer.SpeedLimitation{_value = 0, _originBehaviorType = GetType()};
                 }
             }
     }

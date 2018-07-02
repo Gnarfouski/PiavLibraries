@@ -1,6 +1,6 @@
 ﻿public class StoppingPoint
 {
-    public long OriginId;
+    public PiavRoadAgent Origin;
     public Segment ParentSegment;
     public double Root;
     public StoppingPointStateMachine Sm;
